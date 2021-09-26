@@ -6,9 +6,11 @@
 use crate::adapter::{Adapter, AdapterHandle};
 use crate::api_error::ApiError;
 use crate::client::Client;
+use crate::database::Database;
 use futures::prelude::*;
 use futures::stream::SplitStream;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -287,5 +289,10 @@ impl Plugin {
         sleep(Duration::from_millis(500)).await;
 
         process::exit(DONT_RESTART_EXIT_CODE);
+    }
+
+    pub fn get_config_database(&self) -> Database {
+        let config_path = PathBuf::from(self.user_profile.config_dir.clone());
+        Database::new(config_path, self.plugin_id.clone())
     }
 }
