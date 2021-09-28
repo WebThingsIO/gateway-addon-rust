@@ -5,23 +5,27 @@
  */
 use crate::api_error::ApiError;
 use crate::client::Client;
-use crate::device;
-use crate::device::Device;
+use crate::device::{self, BuiltDevice, Device};
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
-    AdapterUnloadResponseMessageData, Device as DeviceDescription,
-    DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
+    AdapterUnloadResponseMessageData, DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
 };
 
 #[async_trait(?Send)]
 pub trait Adapter {
-    fn get_adapter_handle(&self) -> &AdapterHandle;
+    fn id(&self) -> &str;
+    fn name(&self) -> &str;
+
+    async fn init(self: &mut Built<Self>) -> Result<(), String> {
+        Ok(())
+    }
 
     async fn on_device_saved(
-        &mut self,
+        self: &Built<Self>,
         _id: String,
         _device_description: DeviceWithoutId,
     ) -> Result<(), String> {
@@ -29,16 +33,23 @@ pub trait Adapter {
     }
 }
 
-pub struct AdapterHandle {
+pub struct Built<T: ?Sized> {
+    adapter: Box<T>,
     client: Arc<Mutex<Client>>,
-    pub plugin_id: String,
-    pub adapter_id: String,
-    devices: HashMap<String, Arc<Mutex<dyn Device>>>,
+    plugin_id: String,
+    adapter_id: String,
+    devices: HashMap<String, Arc<Mutex<dyn BuiltDevice>>>,
 }
 
-impl AdapterHandle {
-    pub fn new(client: Arc<Mutex<Client>>, plugin_id: String, adapter_id: String) -> Self {
+impl<T> Built<T> {
+    pub(crate) fn new(
+        adapter: T,
+        client: Arc<Mutex<Client>>,
+        plugin_id: String,
+        adapter_id: String,
+    ) -> Self {
         Self {
+            adapter: Box::new(adapter),
             client,
             plugin_id,
             adapter_id,
@@ -46,45 +57,85 @@ impl AdapterHandle {
         }
     }
 
-    pub async fn add_device<T, F>(
+    pub async fn add_device<D: Device + 'static>(
         &mut self,
-        device_description: DeviceDescription,
-        constructor: F,
-    ) -> Result<Arc<Mutex<T>>, ApiError>
-    where
-        T: Device + 'static,
-        F: FnOnce(device::DeviceHandle) -> T,
-    {
+        device: D,
+    ) -> Result<Arc<Mutex<device::Built<D>>>, ApiError> {
+        let mut device = device::Init::new(device);
+
+        device
+            .init()
+            .await
+            .map_err(|err| ApiError::InitializeDevice(err))?;
+
+        self.add_initialized_device(device).await
+    }
+
+    pub async fn add_initialized_device<D: Device + 'static>(
+        &mut self,
+        device: device::Init<D>,
+    ) -> Result<Arc<Mutex<device::Built<D>>>, ApiError> {
         let message: Message = DeviceAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
-            device: device_description.clone(),
+            device: device.full_description().clone(),
         }
         .into();
 
         self.client.lock().await.send_message(&message).await?;
 
-        let id = device_description.id.clone();
+        let id = device.description().id.clone();
 
-        let device_handle = device::DeviceHandle::new(
+        let device = Arc::new(Mutex::new(device::Built::new(
+            device,
             self.client.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-            device_description,
-        );
-
-        let device = Arc::new(Mutex::new(constructor(device_handle)));
+        )));
 
         self.devices.insert(id, device.clone());
 
         Ok(device)
     }
+}
 
-    pub fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn Device>>> {
+impl<T: ?Sized> Deref for Built<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.adapter
+    }
+}
+
+impl<T: ?Sized> DerefMut for Built<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.adapter
+    }
+}
+
+#[async_trait(?Send)]
+pub trait BuiltAdapter {
+    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice>>>;
+
+    async fn unload(&self) -> Result<(), ApiError>;
+
+    async fn on_device_saved(
+        &mut self,
+        _id: String,
+        _device_description: DeviceWithoutId,
+    ) -> Result<(), String>;
+}
+
+#[async_trait(?Send)]
+impl<T> BuiltAdapter for Built<T>
+where
+    T: Adapter,
+{
+    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice>>> {
         self.devices.get(id).cloned()
     }
 
-    pub async fn unload(&self) -> Result<(), ApiError> {
+    async fn unload(&self) -> Result<(), ApiError> {
         let message: Message = AdapterUnloadResponseMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
@@ -92,5 +143,13 @@ impl AdapterHandle {
         .into();
 
         self.client.lock().await.send_message(&message).await
+    }
+
+    async fn on_device_saved(
+        &mut self,
+        id: String,
+        device_description: DeviceWithoutId,
+    ) -> Result<(), String> {
+        Adapter::on_device_saved(self, id, device_description).await
     }
 }

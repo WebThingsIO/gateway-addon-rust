@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::adapter::{Adapter, AdapterHandle};
+use crate::adapter::{self, Adapter, BuiltAdapter};
 use crate::api_error::ApiError;
 use crate::client::Client;
 use crate::database::Database;
@@ -99,7 +99,7 @@ pub struct Plugin {
     pub user_profile: UserProfile,
     client: Arc<Mutex<Client>>,
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    adapters: HashMap<String, Arc<Mutex<dyn Adapter>>>,
+    adapters: HashMap<String, Arc<Mutex<dyn BuiltAdapter>>>,
 }
 
 enum MessageResult {
@@ -134,17 +134,12 @@ impl Plugin {
             }) => {
                 let adapter = self.borrow_adapter(&message.adapter_id)?;
 
-                let device = adapter
-                    .lock()
-                    .await
-                    .get_adapter_handle()
-                    .get_device(&message.device_id);
+                let device = adapter.lock().await.get_device(&message.device_id);
 
                 if let Some(device) = device {
                     let property = device
                         .lock()
                         .await
-                        .borrow_device_handle()
                         .get_property(&message.property_name)
                         .ok_or_else(|| {
                             format!(
@@ -162,7 +157,6 @@ impl Plugin {
                     property
                         .lock()
                         .await
-                        .borrow_property_handle()
                         .set_value(message.property_value.clone())
                         .map_err(|err| {
                             format!(
@@ -189,7 +183,6 @@ impl Plugin {
                 adapter
                     .lock()
                     .await
-                    .get_adapter_handle()
                     .unload()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
@@ -227,41 +220,49 @@ impl Plugin {
         }
     }
 
-    fn borrow_adapter(&mut self, adapter_id: &str) -> Result<&mut Arc<Mutex<dyn Adapter>>, String> {
+    fn borrow_adapter(
+        &mut self,
+        adapter_id: &str,
+    ) -> Result<&mut Arc<Mutex<dyn BuiltAdapter>>, String> {
         self.adapters
             .get_mut(adapter_id)
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
     }
 
-    pub async fn create_adapter<T, F>(
+    pub async fn create_adapter<T: Adapter + 'static>(
         &mut self,
-        adapter_id: &str,
-        name: &str,
-        constructor: F,
-    ) -> Result<Arc<Mutex<T>>, ApiError>
-    where
-        T: Adapter + 'static,
-        F: FnOnce(AdapterHandle) -> T,
-    {
+        adapter: T,
+    ) -> Result<Arc<Mutex<adapter::Built<T>>>, ApiError> {
+        let adapter_id = adapter.id().to_owned();
+        let adapter_name = adapter.name().to_owned();
+
         let message: Message = AdapterAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: adapter_id.to_owned(),
-            name: name.to_owned(),
+            name: adapter_name,
             package_name: self.plugin_id.clone(),
         }
         .into();
 
         self.client.lock().await.send_message(&message).await?;
 
-        let adapter_handle = AdapterHandle::new(
+        let adapter = adapter::Built::new(
+            adapter,
             self.client.clone(),
             self.plugin_id.clone(),
             adapter_id.to_owned(),
         );
 
-        let adapter = Arc::new(Mutex::new(constructor(adapter_handle)));
+        let adapter = Arc::new(Mutex::new(adapter));
 
-        self.adapters.insert(adapter_id.to_owned(), adapter.clone());
+        self.adapters.insert(adapter_id, adapter.clone());
+
+        adapter
+            .lock()
+            .await
+            .init()
+            .await
+            .map_err(|err| ApiError::InitializeAdapter(err))?;
 
         Ok(adapter)
     }

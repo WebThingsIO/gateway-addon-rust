@@ -18,4 +18,13 @@ pub enum ApiError {
 
     #[error("Failed to access database")]
     Database(#[source] sqlite::Error),
+
+    #[error("Failed to initialize adapter")]
+    InitializeAdapter(String),
+
+    #[error("Failed to initialize device")]
+    InitializeDevice(String),
+
+    #[error("Failed to initialize property")]
+    InitializeProperty(String),
 }
