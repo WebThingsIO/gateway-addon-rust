@@ -78,13 +78,13 @@ impl<T> Built<T> {
         let message: Message = DeviceAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
-            device: device.full_description().clone(),
+            device: device.description(),
         }
         .into();
 
         self.client.lock().await.send_message(&message).await?;
 
-        let id = device.description().id.clone();
+        let id = device.id().to_owned();
 
         let device = Arc::new(Mutex::new(device::Built::new(
             device,

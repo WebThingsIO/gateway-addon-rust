@@ -15,30 +15,20 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{Device as FullDeviceDescription, DevicePin, Link};
-pub struct DeviceDescription {
-    pub at_context: Option<String>,
-    pub at_type: Option<Vec<String>>,
-    pub base_href: Option<String>,
-    pub credentials_required: Option<bool>,
-    pub description: Option<String>,
-    pub id: String,
-    pub links: Option<Vec<Link>>,
-    pub pin: Option<DevicePin>,
-    pub title: Option<String>,
-}
+use webthings_gateway_ipc_types::Device as DeviceDescription;
 
 #[async_trait(?Send)]
 pub trait Device {
-    fn description(&self) -> DeviceDescription;
     async fn init(self: &mut Init<Self>) -> Result<(), String> {
         Ok(())
     }
+    fn id(&self) -> &str;
 }
 
 pub struct Init<T: ?Sized> {
     device: Box<T>,
     properties: HashMap<String, Box<dyn InitProperty>>,
+    description: DeviceDescription,
 }
 
 impl<T: ?Sized> Deref for Init<T> {
@@ -57,9 +47,24 @@ impl<T: ?Sized> DerefMut for Init<T> {
 
 impl<T: Device> Init<T> {
     pub fn new(device: T) -> Self {
+        let id = device.id().to_owned();
         Self {
             device: Box::new(device),
             properties: HashMap::new(),
+            description: DeviceDescription {
+                id,
+                at_context: None,
+                at_type: None,
+                actions: None,
+                base_href: None,
+                credentials_required: None,
+                description: None,
+                events: None,
+                links: None,
+                pin: None,
+                properties: None,
+                title: None,
+            },
         }
     }
 
@@ -78,30 +83,24 @@ impl<T: Device> Init<T> {
 
     pub fn add_initialized_property<P: Property + 'static>(&mut self, property: property::Init<P>) {
         self.properties
-            .insert(property.name().to_owned(), Box::new(property));
+            .insert(property.id().to_owned(), Box::new(property));
     }
 
-    pub fn full_description(&self) -> FullDeviceDescription {
+    pub fn description(&self) -> DeviceDescription {
         let properties = self
             .properties
             .iter()
             .map(|(name, property)| (name.clone(), property.description()))
             .collect();
-        let description = self.description();
-        FullDeviceDescription {
-            at_context: description.at_context.clone(),
-            at_type: description.at_type.clone(),
-            actions: None.clone(),
-            base_href: description.base_href.clone(),
-            credentials_required: description.credentials_required.clone(),
-            description: description.description.clone(),
-            events: None.clone(),
-            id: description.id.clone(),
-            links: description.links.clone(),
-            pin: description.pin.clone(),
-            properties: Some(properties).clone(),
-            title: description.title.clone(),
-        }
+        let mut description = self.description.clone();
+        description.properties = Some(properties);
+        description.id = self.id().to_owned();
+        description
+    }
+
+    pub fn description_mut(&mut self) -> &mut DeviceDescription {
+        self.description = self.description();
+        &mut self.description
     }
 }
 
@@ -111,6 +110,7 @@ pub struct Built<T: ?Sized> {
     plugin_id: String,
     adapter_id: String,
     properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty>>>>,
+    description: DeviceDescription,
 }
 
 impl<T: Device + 'static> Built<T> {
@@ -123,8 +123,13 @@ impl<T: Device + 'static> Built<T> {
         let client_copy = client.clone();
         let plugin_id_copy = plugin_id.clone();
         let adapter_id_copy = adapter_id.clone();
-        let device_id = device.description().id.clone();
-        let Init { device, properties } = device;
+        let device_id = device.id().to_owned();
+        let description = device.description;
+        let Init {
+            device,
+            properties,
+            description: _,
+        } = device;
         let properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty>>>> = properties
             .into_iter()
             .map(move |(name, property)| {
@@ -143,6 +148,7 @@ impl<T: Device + 'static> Built<T> {
             plugin_id,
             adapter_id,
             properties,
+            description,
         }
     }
 }
@@ -163,10 +169,20 @@ impl<T: Device> DerefMut for Built<T> {
 
 pub trait BuiltDevice {
     fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty>>>>;
+    fn description(&self) -> &DeviceDescription;
+    fn description_mut(&mut self) -> &mut DeviceDescription;
 }
 
 impl<T: Device> BuiltDevice for Built<T> {
     fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty>>>> {
         self.properties.get(name).cloned()
+    }
+
+    fn description(&self) -> &DeviceDescription {
+        &self.description
+    }
+
+    fn description_mut(&mut self) -> &mut DeviceDescription {
+        &mut self.description
     }
 }

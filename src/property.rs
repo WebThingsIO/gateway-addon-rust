@@ -16,26 +16,68 @@ use webthings_gateway_ipc_types::{
     DevicePropertyChangedNotificationMessageData, Message, Property as PropertyDescription,
 };
 
+pub enum Type {
+    Null,
+    Boolean,
+    Integer,
+    Number,
+    String,
+}
+
+impl ToString for Type {
+    fn to_string(&self) -> String {
+        match self {
+            Type::Null => "null",
+            Type::Boolean => "boolean",
+            Type::Integer => "integer",
+            Type::Number => "number",
+            Type::String => "string",
+        }
+        .to_owned()
+    }
+}
+
 #[async_trait(?Send)]
 pub trait Property {
     async fn on_update(self: &Built<Self>, _value: Value) -> Result<(), String> {
         Ok(())
     }
+
     async fn init(self: &mut Init<Self>) -> Result<(), String> {
         Ok(())
     }
-    fn description(&self) -> PropertyDescription;
-    fn name(&self) -> &str;
+
+    fn id(&self) -> &str;
+
+    fn type_(&self) -> Type;
 }
 
 pub struct Init<T: ?Sized> {
     property: Box<T>,
+    description: PropertyDescription,
 }
 
 impl<T: Property> Init<T> {
     pub fn new(property: T) -> Self {
+        let type_ = property.type_().to_string();
         Self {
             property: Box::new(property),
+            description: PropertyDescription {
+                at_type: None,
+                description: None,
+                enum_: None,
+                links: None,
+                maximum: None,
+                minimum: None,
+                multiple_of: None,
+                name: None,
+                read_only: None,
+                title: None,
+                type_: type_,
+                unit: None,
+                value: None,
+                visible: None,
+            },
         }
     }
 }
@@ -64,6 +106,7 @@ pub trait InitProperty {
     ) -> Box<dyn BuiltProperty>;
 
     fn description(&self) -> PropertyDescription;
+    fn description_mut(&mut self) -> &mut PropertyDescription;
 }
 
 impl<T: Property + 'static> InitProperty for Init<T> {
@@ -74,17 +117,18 @@ impl<T: Property + 'static> InitProperty for Init<T> {
         adapter_id: String,
         device_id: String,
     ) -> Box<dyn BuiltProperty> {
-        Box::new(Built::new(
-            *self.property,
-            client,
-            plugin_id,
-            adapter_id,
-            device_id,
-        ))
+        Box::new(Built::new(*self, client, plugin_id, adapter_id, device_id))
     }
 
     fn description(&self) -> PropertyDescription {
-        self.property.description()
+        let mut description = self.description.clone();
+        description.type_ = self.type_().to_string();
+        description
+    }
+
+    fn description_mut(&mut self) -> &mut PropertyDescription {
+        self.description = self.description();
+        &mut self.description
     }
 }
 
@@ -94,23 +138,34 @@ pub struct Built<T: ?Sized> {
     plugin_id: String,
     adapter_id: String,
     device_id: String,
+    description: PropertyDescription,
 }
 
-impl<T: Property> Built<T> {
+impl<T: Property + 'static> Built<T> {
     pub(crate) fn new(
-        property: T,
+        property: Init<T>,
         client: Arc<Mutex<Client>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
     ) -> Self {
+        let description = property.description();
+        let Init {
+            property,
+            description: _,
+        } = property;
         Self {
-            property: Box::new(property),
+            property,
             client,
             plugin_id,
             adapter_id,
             device_id,
+            description,
         }
+    }
+
+    pub fn description(&self) -> &PropertyDescription {
+        &self.description
     }
 }
 
@@ -130,15 +185,20 @@ impl<T: ?Sized> DerefMut for Built<T> {
 
 #[async_trait(?Send)]
 pub trait BuiltProperty {
+    fn set_cached_value(&mut self, value: Value);
     async fn set_value(&mut self, value: Value) -> Result<(), ApiError>;
-    async fn on_update(&mut self, _value: Value) -> Result<(), String>;
+    async fn on_update(&mut self, value: Value) -> Result<(), String>;
 }
 
 #[async_trait(?Send)]
-impl<T: Property> BuiltProperty for Built<T> {
+impl<T: Property + 'static> BuiltProperty for Built<T> {
+    fn set_cached_value(&mut self, value: Value) {
+        self.description.value = Some(value);
+    }
+
     async fn set_value(&mut self, value: Value) -> Result<(), ApiError> {
-        let mut description = self.description().clone();
-        description.value = Some(value);
+        self.set_cached_value(value);
+        let description = self.description().clone();
 
         let message: Message = DevicePropertyChangedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -150,6 +210,7 @@ impl<T: Property> BuiltProperty for Built<T> {
 
         self.client.lock().await.send_message(&message).await
     }
+
     async fn on_update(&mut self, value: Value) -> Result<(), String> {
         Property::on_update(self, value).await
     }
