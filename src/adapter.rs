@@ -29,6 +29,7 @@ pub trait Adapter {
     }
 }
 
+#[derive(Clone)]
 pub struct AdapterHandle {
     client: Arc<Mutex<Client>>,
     pub plugin_id: String,

@@ -16,6 +16,7 @@ pub trait Device {
     fn borrow_device_handle(&mut self) -> &mut DeviceHandle;
 }
 
+#[derive(Clone)]
 pub struct DeviceHandle {
     client: Arc<Mutex<Client>>,
     pub plugin_id: String,
