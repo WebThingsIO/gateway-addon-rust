@@ -30,7 +30,7 @@ pub trait Adapter {
 }
 
 pub trait DeviceBuilder<T: Device> {
-    fn build(device_handle: DeviceHandle) -> T;
+    fn build(self, device_handle: DeviceHandle) -> T;
     fn description(&self) -> DeviceDescription;
 }
 
@@ -76,7 +76,7 @@ impl AdapterHandle {
             device_description,
         );
 
-        let device = Arc::new(Mutex::new(B::build(device_handle)));
+        let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
 
         self.devices.insert(id, device.clone());
 
