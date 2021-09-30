@@ -18,20 +18,20 @@ use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as DeviceDescription;
 
 #[async_trait(?Send)]
-pub trait Device {
+pub trait Device: Send {
     async fn init(self: &mut Init<Self>) -> Result<(), String> {
         Ok(())
     }
     fn id(&self) -> &str;
 }
 
-pub struct Init<T: ?Sized> {
+pub struct Init<T: ?Sized + Send> {
     device: Box<T>,
-    properties: HashMap<String, Box<dyn InitProperty>>,
+    properties: HashMap<String, Box<dyn InitProperty + Send>>,
     description: DeviceDescription,
 }
 
-impl<T: ?Sized> Deref for Init<T> {
+impl<T: ?Sized + Send> Deref for Init<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -39,13 +39,13 @@ impl<T: ?Sized> Deref for Init<T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for Init<T> {
+impl<T: ?Sized + Send> DerefMut for Init<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.device
     }
 }
 
-impl<T: Device> Init<T> {
+impl<T: Device + Send> Init<T> {
     pub fn new(device: T) -> Self {
         let id = device.id().to_owned();
         Self {
@@ -68,7 +68,7 @@ impl<T: Device> Init<T> {
         }
     }
 
-    pub async fn add_property<P: Property + 'static>(
+    pub async fn add_property<P: Property + 'static + Send + Sync>(
         &mut self,
         property: P,
     ) -> Result<(), ApiError> {
@@ -81,7 +81,10 @@ impl<T: Device> Init<T> {
         Ok(())
     }
 
-    pub fn add_initialized_property<P: Property + 'static>(&mut self, property: property::Init<P>) {
+    pub fn add_initialized_property<P: Property + 'static + Send + Sync>(
+        &mut self,
+        property: property::Init<P>,
+    ) {
         self.properties
             .insert(property.id().to_owned(), Box::new(property));
     }
@@ -104,16 +107,16 @@ impl<T: Device> Init<T> {
     }
 }
 
-pub struct Built<T: ?Sized> {
+pub struct Built<T: ?Sized + Send> {
     device: Box<T>,
     client: Arc<Mutex<Client>>,
     plugin_id: String,
     adapter_id: String,
-    properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty>>>>,
+    properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty + Send>>>>,
     description: DeviceDescription,
 }
 
-impl<T: Device + 'static> Built<T> {
+impl<T: Device + 'static + Send> Built<T> {
     pub(crate) fn new(
         device: Init<T>,
         client: Arc<Mutex<Client>>,
@@ -130,18 +133,19 @@ impl<T: Device + 'static> Built<T> {
             properties,
             description: _,
         } = device;
-        let properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty>>>> = properties
-            .into_iter()
-            .map(move |(name, property)| {
-                let property = property.into_built(
-                    client_copy.clone(),
-                    plugin_id_copy.clone(),
-                    adapter_id_copy.clone(),
-                    device_id.clone(),
-                );
-                (name.clone(), Arc::new(Mutex::new(property)))
-            })
-            .collect();
+        let properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty + Send + 'static>>>> =
+            properties
+                .into_iter()
+                .map(move |(name, property)| {
+                    let property = property.into_built(
+                        client_copy.clone(),
+                        plugin_id_copy.clone(),
+                        adapter_id_copy.clone(),
+                        device_id.clone(),
+                    );
+                    (name.clone(), Arc::new(Mutex::new(property)))
+                })
+                .collect();
         Self {
             device,
             client,
@@ -153,7 +157,7 @@ impl<T: Device + 'static> Built<T> {
     }
 }
 
-impl<T: Device> Deref for Built<T> {
+impl<T: Device + Send> Deref for Built<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -161,20 +165,20 @@ impl<T: Device> Deref for Built<T> {
     }
 }
 
-impl<T: Device> DerefMut for Built<T> {
+impl<T: Device + Send> DerefMut for Built<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.device
     }
 }
 
-pub trait BuiltDevice {
-    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty>>>>;
+pub trait BuiltDevice: Send {
+    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty + Send>>>>;
     fn description(&self) -> &DeviceDescription;
     fn description_mut(&mut self) -> &mut DeviceDescription;
 }
 
-impl<T: Device> BuiltDevice for Built<T> {
-    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty>>>> {
+impl<T: Device + Send> BuiltDevice for Built<T> {
+    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty + Send>>>> {
         self.properties.get(name).cloned()
     }
 

@@ -16,7 +16,7 @@ use webthings_gateway_ipc_types::{
 };
 
 #[async_trait(?Send)]
-pub trait Adapter {
+pub trait Adapter: Send {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
 
@@ -38,7 +38,7 @@ pub struct Built<T: ?Sized> {
     client: Arc<Mutex<Client>>,
     plugin_id: String,
     adapter_id: String,
-    devices: HashMap<String, Arc<Mutex<dyn BuiltDevice>>>,
+    devices: HashMap<String, Arc<Mutex<dyn BuiltDevice + Send>>>,
 }
 
 impl<T> Built<T> {
@@ -57,7 +57,7 @@ impl<T> Built<T> {
         }
     }
 
-    pub async fn add_device<D: Device + 'static>(
+    pub async fn add_device<D: Device + 'static + Send>(
         &mut self,
         device: D,
     ) -> Result<Arc<Mutex<device::Built<D>>>, ApiError> {
@@ -71,7 +71,7 @@ impl<T> Built<T> {
         self.add_initialized_device(device).await
     }
 
-    pub async fn add_initialized_device<D: Device + 'static>(
+    pub async fn add_initialized_device<D: Device + 'static + Send>(
         &mut self,
         device: device::Init<D>,
     ) -> Result<Arc<Mutex<device::Built<D>>>, ApiError> {
@@ -114,8 +114,8 @@ impl<T: ?Sized> DerefMut for Built<T> {
 }
 
 #[async_trait(?Send)]
-pub trait BuiltAdapter {
-    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice>>>;
+pub trait BuiltAdapter: Send {
+    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice + Send>>>;
 
     async fn unload(&self) -> Result<(), ApiError>;
 
@@ -131,7 +131,7 @@ impl<T> BuiltAdapter for Built<T>
 where
     T: Adapter,
 {
-    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice>>> {
+    fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn BuiltDevice + Send>>> {
         self.devices.get(id).cloned()
     }
 

@@ -158,13 +158,13 @@ impl Plugin {
                         .lock()
                         .await
                         .set_value(message.property_value.clone())
+                        .await
                         .map_err(|err| {
                             format!(
                                 "Failed to update property {} of {}: {}",
                                 message.property_name, message.device_id, err,
                             )
-                        })
-                        .await?;
+                        })?;
                 }
 
                 Ok(MessageResult::Continue)

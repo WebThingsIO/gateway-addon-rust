@@ -37,8 +37,8 @@ impl ToString for Type {
     }
 }
 
-#[async_trait(?Send)]
-pub trait Property {
+#[async_trait]
+pub trait Property: Send {
     async fn on_update(self: &Built<Self>, _value: Value) -> Result<(), String> {
         Ok(())
     }
@@ -52,12 +52,12 @@ pub trait Property {
     fn type_(&self) -> Type;
 }
 
-pub struct Init<T: ?Sized> {
+pub struct Init<T: ?Sized + Send> {
     property: Box<T>,
     description: PropertyDescription,
 }
 
-impl<T: Property> Init<T> {
+impl<T: Property + Send> Init<T> {
     pub fn new(property: T) -> Self {
         let type_ = property.type_().to_string();
         Self {
@@ -82,7 +82,7 @@ impl<T: Property> Init<T> {
     }
 }
 
-impl<T: ?Sized> Deref for Init<T> {
+impl<T: ?Sized + Send> Deref for Init<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -90,33 +90,33 @@ impl<T: ?Sized> Deref for Init<T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for Init<T> {
+impl<T: ?Sized + Send> DerefMut for Init<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.property
     }
 }
 
-pub trait InitProperty {
+pub trait InitProperty: Send {
     fn into_built(
         self: Box<Self>,
         client: Arc<Mutex<Client>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
-    ) -> Box<dyn BuiltProperty>;
+    ) -> Box<dyn BuiltProperty + Send + 'static>;
 
     fn description(&self) -> PropertyDescription;
     fn description_mut(&mut self) -> &mut PropertyDescription;
 }
 
-impl<T: Property + 'static> InitProperty for Init<T> {
+impl<T: Property + 'static + Send + Sync> InitProperty for Init<T> {
     fn into_built(
         self: Box<Self>,
         client: Arc<Mutex<Client>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
-    ) -> Box<dyn BuiltProperty> {
+    ) -> Box<dyn BuiltProperty + Send + 'static> {
         Box::new(Built::new(*self, client, plugin_id, adapter_id, device_id))
     }
 
@@ -132,7 +132,7 @@ impl<T: Property + 'static> InitProperty for Init<T> {
     }
 }
 
-pub struct Built<T: ?Sized> {
+pub struct Built<T: ?Sized + Send + Sync> {
     property: Box<T>,
     client: Arc<Mutex<Client>>,
     plugin_id: String,
@@ -141,7 +141,7 @@ pub struct Built<T: ?Sized> {
     description: PropertyDescription,
 }
 
-impl<T: Property + 'static> Built<T> {
+impl<T: Property + 'static + Send + Sync> Built<T> {
     pub(crate) fn new(
         property: Init<T>,
         client: Arc<Mutex<Client>>,
@@ -169,7 +169,7 @@ impl<T: Property + 'static> Built<T> {
     }
 }
 
-impl<T: ?Sized> Deref for Built<T> {
+impl<T: ?Sized + Send + Sync> Deref for Built<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -177,21 +177,21 @@ impl<T: ?Sized> Deref for Built<T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for Built<T> {
+impl<T: ?Sized + Send + Sync> DerefMut for Built<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.property
     }
 }
 
-#[async_trait(?Send)]
-pub trait BuiltProperty {
+#[async_trait]
+pub trait BuiltProperty: Send {
     fn set_cached_value(&mut self, value: Value);
     async fn set_value(&mut self, value: Value) -> Result<(), ApiError>;
     async fn on_update(&mut self, value: Value) -> Result<(), String>;
 }
 
-#[async_trait(?Send)]
-impl<T: Property + 'static> BuiltProperty for Built<T> {
+#[async_trait]
+impl<T: Property + 'static + Send + Sync> BuiltProperty for Built<T> {
     fn set_cached_value(&mut self, value: Value) {
         self.description.value = Some(value);
     }
