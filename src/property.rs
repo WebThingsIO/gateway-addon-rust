@@ -22,7 +22,7 @@ pub trait Property {
 }
 
 pub struct PropertyHandle {
-    client: Arc<Mutex<Client>>,
+    client: Arc<Mutex<dyn Client>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub device_id: String,
@@ -32,7 +32,7 @@ pub struct PropertyHandle {
 
 impl PropertyHandle {
     pub fn new(
-        client: Arc<Mutex<Client>>,
+        client: Arc<Mutex<dyn Client>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
@@ -61,5 +61,72 @@ impl PropertyHandle {
         .into();
 
         self.client.lock().await.send_message(&message).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::client::MockClient;
+    use crate::property::PropertyHandle;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use webthings_gateway_ipc_types::{Message, Property as PropertyDescription};
+
+    #[tokio::test]
+    async fn test_unload() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let property_name = String::from("property_name");
+        let client = Arc::new(Mutex::new(MockClient::new()));
+        let value = json!(42);
+
+        let property_description = PropertyDescription {
+            at_type: None,
+            name: Some(property_name.clone()),
+            title: None,
+            description: None,
+            type_: String::from("integer"),
+            unit: None,
+            enum_: None,
+            links: None,
+            minimum: None,
+            maximum: None,
+            multiple_of: None,
+            read_only: None,
+            value: None,
+            visible: None,
+        };
+
+        let mut property = PropertyHandle::new(
+            client.clone(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            property_name.clone(),
+            property_description,
+        );
+
+        let expected_value = Some(value.clone());
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DevicePropertyChangedNotification(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                        && msg.data.property.name == Some(property_name.clone())
+                        && msg.data.property.value == expected_value
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        property.set_value(value).await.unwrap();
     }
 }
