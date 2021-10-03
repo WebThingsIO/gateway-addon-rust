@@ -10,6 +10,7 @@ use crate::device::Device;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     AdapterUnloadResponseMessageData, Device as DeviceDescription,
@@ -25,6 +26,14 @@ pub trait Adapter {
         _id: String,
         _device_description: DeviceWithoutId,
     ) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn on_start_pairing(&mut self, _timeout: Duration) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn on_cancel_pairing(&mut self) -> Result<(), String> {
         Ok(())
     }
 }
