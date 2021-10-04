@@ -5,7 +5,7 @@
  */
 use crate::adapter::{Adapter, AdapterHandle};
 use crate::api_error::ApiError;
-use crate::client::Client;
+use crate::client::{Client, WebsocketClient};
 use crate::database::Database;
 use futures::prelude::*;
 use futures::stream::SplitStream;
@@ -37,7 +37,7 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
 
     let (sink, mut stream) = socket.split();
-    let mut client = Client::new(sink);
+    let mut client = WebsocketClient::new(sink);
 
     let message: IPCMessage = PluginRegisterRequestMessageData {
         plugin_id: plugin_id.to_owned(),
@@ -97,7 +97,7 @@ pub struct Plugin {
     pub plugin_id: String,
     pub preferences: Preferences,
     pub user_profile: UserProfile,
-    client: Arc<Mutex<Client>>,
+    client: Arc<Mutex<dyn Client>>,
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     adapters: HashMap<String, Arc<Mutex<dyn Adapter>>>,
 }
