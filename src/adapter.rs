@@ -43,6 +43,7 @@ pub trait DeviceBuilder<T: Device> {
     fn description(&self) -> DeviceDescription;
 }
 
+#[derive(Clone)]
 pub struct AdapterHandle {
     client: Arc<Mutex<dyn Client>>,
     pub plugin_id: String,

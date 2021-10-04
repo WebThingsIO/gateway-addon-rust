@@ -21,6 +21,7 @@ pub trait Property {
     }
 }
 
+#[derive(Clone)]
 pub struct PropertyHandle {
     client: Arc<Mutex<dyn Client>>,
     pub plugin_id: String,
