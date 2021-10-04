@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as DeviceDescription;
@@ -20,6 +20,9 @@ use webthings_gateway_ipc_types::Device as DeviceDescription;
 #[async_trait(?Send)]
 pub trait Device: Send {
     async fn init(self: &mut Init<Self>) -> Result<(), String> {
+        Ok(())
+    }
+    async fn built(self: &mut Built<Self>) -> Result<(), String> {
         Ok(())
     }
     fn id(&self) -> &str;
@@ -112,17 +115,18 @@ pub struct Built<T: ?Sized + Send> {
     client: Arc<Mutex<Client>>,
     plugin_id: String,
     adapter_id: String,
-    properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty + Send>>>>,
+    properties: HashMap<String, Arc<Mutex<dyn BuiltProperty + Send>>>,
     description: DeviceDescription,
+    weak: Weak<Mutex<Built<T>>>,
 }
 
 impl<T: Device + 'static + Send> Built<T> {
-    pub(crate) fn new(
+    pub async fn new(
         device: Init<T>,
         client: Arc<Mutex<Client>>,
         plugin_id: String,
         adapter_id: String,
-    ) -> Self {
+    ) -> Result<Arc<Mutex<Self>>, ApiError> {
         let client_copy = client.clone();
         let plugin_id_copy = plugin_id.clone();
         let adapter_id_copy = adapter_id.clone();
@@ -133,7 +137,7 @@ impl<T: Device + 'static + Send> Built<T> {
             properties,
             description: _,
         } = device;
-        let properties: HashMap<String, Arc<Mutex<Box<dyn BuiltProperty + Send + 'static>>>> =
+        let properties: HashMap<String, Arc<Mutex<dyn BuiltProperty + Send + 'static>>> =
             properties
                 .into_iter()
                 .map(move |(name, property)| {
@@ -143,21 +147,36 @@ impl<T: Device + 'static + Send> Built<T> {
                         adapter_id_copy.clone(),
                         device_id.clone(),
                     );
-                    (name.clone(), Arc::new(Mutex::new(property)))
+                    (name.clone(), property)
                 })
                 .collect();
-        Self {
-            device,
-            client,
-            plugin_id,
-            adapter_id,
-            properties,
-            description,
+        for (_, property) in properties.iter() {
+            property
+                .lock()
+                .await
+                .built()
+                .await
+                .map_err(|err| ApiError::InitializeBuiltProperty(err))?;
         }
+        Ok(Arc::new_cyclic(|weak| {
+            Mutex::new(Self {
+                device,
+                client,
+                plugin_id,
+                adapter_id,
+                properties,
+                description,
+                weak: weak.clone(),
+            })
+        }))
+    }
+
+    pub fn weak(&self) -> &Weak<Mutex<Built<T>>> {
+        &self.weak
     }
 }
 
-impl<T: Device + Send> Deref for Built<T> {
+impl<T: ?Sized + Send> Deref for Built<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -165,20 +184,20 @@ impl<T: Device + Send> Deref for Built<T> {
     }
 }
 
-impl<T: Device + Send> DerefMut for Built<T> {
+impl<T: ?Sized + Send> DerefMut for Built<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.device
     }
 }
 
 pub trait BuiltDevice: Send {
-    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty + Send>>>>;
+    fn get_property(&self, name: &str) -> Option<Arc<Mutex<dyn BuiltProperty + Send>>>;
     fn description(&self) -> &DeviceDescription;
     fn description_mut(&mut self) -> &mut DeviceDescription;
 }
 
 impl<T: Device + Send> BuiltDevice for Built<T> {
-    fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn BuiltProperty + Send>>>> {
+    fn get_property(&self, name: &str) -> Option<Arc<Mutex<dyn BuiltProperty + Send>>> {
         self.properties.get(name).cloned()
     }
 

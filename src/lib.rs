@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-#![feature(arbitrary_self_types)]
+#![feature(arbitrary_self_types, arc_new_cyclic)]
 
 pub mod adapter;
 pub mod api_error;

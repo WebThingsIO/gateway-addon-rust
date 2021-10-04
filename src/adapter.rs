@@ -84,18 +84,31 @@ impl<T> Built<T> {
 
         self.client.lock().await.send_message(&message).await?;
 
-        let id = device.id().to_owned();
-
-        let device = Arc::new(Mutex::new(device::Built::new(
+        let device = device::Built::new(
             device,
             self.client.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-        )));
+        )
+        .await?;
 
+        device
+            .lock()
+            .await
+            .built()
+            .await
+            .map_err(|err| ApiError::InitializeBuiltDevice(err))?;
+
+        Ok(self.add_built_device(device).await)
+    }
+
+    pub async fn add_built_device<D: Device + 'static + Send>(
+        &mut self,
+        device: Arc<Mutex<device::Built<D>>>,
+    ) -> Arc<Mutex<device::Built<D>>> {
+        let id = device.lock().await.id().to_owned();
         self.devices.insert(id, device.clone());
-
-        Ok(device)
+        device
     }
 }
 

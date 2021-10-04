@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::{
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
@@ -38,12 +38,16 @@ impl ToString for Type {
 }
 
 #[async_trait]
-pub trait Property: Send {
+pub trait Property: Send + Sync {
     async fn on_update(self: &Built<Self>, _value: Value) -> Result<(), String> {
         Ok(())
     }
 
     async fn init(self: &mut Init<Self>) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn built(self: &mut Built<Self>) -> Result<(), String> {
         Ok(())
     }
 
@@ -103,7 +107,7 @@ pub trait InitProperty: Send {
         plugin_id: String,
         adapter_id: String,
         device_id: String,
-    ) -> Box<dyn BuiltProperty + Send + 'static>;
+    ) -> Arc<Mutex<dyn BuiltProperty + Send + 'static>>;
 
     fn description(&self) -> PropertyDescription;
     fn description_mut(&mut self) -> &mut PropertyDescription;
@@ -116,8 +120,8 @@ impl<T: Property + 'static + Send + Sync> InitProperty for Init<T> {
         plugin_id: String,
         adapter_id: String,
         device_id: String,
-    ) -> Box<dyn BuiltProperty + Send + 'static> {
-        Box::new(Built::new(*self, client, plugin_id, adapter_id, device_id))
+    ) -> Arc<Mutex<dyn BuiltProperty + Send + 'static>> {
+        Built::new(*self, client, plugin_id, adapter_id, device_id)
     }
 
     fn description(&self) -> PropertyDescription {
@@ -139,6 +143,7 @@ pub struct Built<T: ?Sized + Send + Sync> {
     adapter_id: String,
     device_id: String,
     description: PropertyDescription,
+    weak: Weak<Mutex<Built<T>>>,
 }
 
 impl<T: Property + 'static + Send + Sync> Built<T> {
@@ -148,27 +153,33 @@ impl<T: Property + 'static + Send + Sync> Built<T> {
         plugin_id: String,
         adapter_id: String,
         device_id: String,
-    ) -> Self {
+    ) -> Arc<Mutex<Self>> {
         let description = property.description();
         let Init {
             property,
             description: _,
         } = property;
-        Self {
-            property,
-            client,
-            plugin_id,
-            adapter_id,
-            device_id,
-            description,
-        }
+        Arc::new_cyclic(|weak| {
+            Mutex::new(Self {
+                property,
+                client,
+                plugin_id,
+                adapter_id,
+                device_id,
+                description,
+                weak: weak.clone(),
+            })
+        })
     }
 
     pub fn description(&self) -> &PropertyDescription {
         &self.description
     }
-}
 
+    pub fn weak(&self) -> &Weak<Mutex<Built<T>>> {
+        &self.weak
+    }
+}
 impl<T: ?Sized + Send + Sync> Deref for Built<T> {
     type Target = T;
 
@@ -188,6 +199,7 @@ pub trait BuiltProperty: Send {
     fn set_cached_value(&mut self, value: Value);
     async fn set_value(&mut self, value: Value) -> Result<(), ApiError>;
     async fn on_update(&mut self, value: Value) -> Result<(), String>;
+    async fn built(&mut self) -> Result<(), String>;
 }
 
 #[async_trait]
@@ -213,5 +225,9 @@ impl<T: Property + 'static + Send + Sync> BuiltProperty for Built<T> {
 
     async fn on_update(&mut self, value: Value) -> Result<(), String> {
         Property::on_update(self, value).await
+    }
+
+    async fn built(&mut self) -> Result<(), String> {
+        Property::built(self).await
     }
 }

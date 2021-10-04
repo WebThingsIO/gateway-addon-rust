@@ -25,6 +25,12 @@ pub enum ApiError {
     #[error("Failed to initialize device")]
     InitializeDevice(String),
 
+    #[error("Failed to initialize built device")]
+    InitializeBuiltDevice(String),
+
     #[error("Failed to initialize property")]
     InitializeProperty(String),
+
+    #[error("Failed to initialize built property")]
+    InitializeBuiltProperty(String),
 }
