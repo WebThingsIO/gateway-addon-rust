@@ -6,7 +6,7 @@
 use crate::api_error::ApiError;
 use crate::client::Client;
 use crate::device;
-use crate::device::Device;
+use crate::device::{Device, DeviceHandle};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,6 +29,11 @@ pub trait Adapter {
     }
 }
 
+pub trait DeviceBuilder<T: Device> {
+    fn build(self, device_handle: DeviceHandle) -> T;
+    fn description(&self) -> DeviceDescription;
+}
+
 pub struct AdapterHandle {
     client: Arc<Mutex<Client>>,
     pub plugin_id: String,
@@ -46,15 +51,13 @@ impl AdapterHandle {
         }
     }
 
-    pub async fn add_device<T, F>(
-        &mut self,
-        device_description: DeviceDescription,
-        constructor: F,
-    ) -> Result<Arc<Mutex<T>>, ApiError>
+    pub async fn add_device<D, B>(&mut self, device_builder: B) -> Result<Arc<Mutex<D>>, ApiError>
     where
-        T: Device + 'static,
-        F: FnOnce(device::DeviceHandle) -> T,
+        D: Device + 'static,
+        B: DeviceBuilder<D>,
     {
+        let device_description = device_builder.description();
+
         let message: Message = DeviceAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
@@ -73,7 +76,7 @@ impl AdapterHandle {
             device_description,
         );
 
-        let device = Arc::new(Mutex::new(constructor(device_handle)));
+        let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
 
         self.devices.insert(id, device.clone());
 
