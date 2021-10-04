@@ -110,9 +110,11 @@ impl AdapterHandle {
 
 #[cfg(test)]
 mod tests {
-    use crate::adapter::AdapterHandle;
-    use crate::client::MockClient;
-    use crate::device::{Device, DeviceHandle};
+    use crate::{
+        adapter::{AdapterHandle, DeviceBuilder},
+        client::MockClient,
+        device::{Device, DeviceHandle},
+    };
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{Device as DeviceDescription, Message};
@@ -133,6 +135,39 @@ mod tests {
         }
     }
 
+    struct MockDeviceBuilder {
+        device_id: String,
+    }
+
+    impl MockDeviceBuilder {
+        pub fn new(device_id: String) -> Self {
+            Self { device_id }
+        }
+    }
+
+    impl DeviceBuilder<MockDevice> for MockDeviceBuilder {
+        fn build(self, device_handle: DeviceHandle) -> MockDevice {
+            MockDevice::new(device_handle)
+        }
+
+        fn description(&self) -> DeviceDescription {
+            DeviceDescription {
+                at_context: None,
+                at_type: None,
+                id: self.device_id.clone(),
+                title: None,
+                description: None,
+                properties: None,
+                actions: None,
+                events: None,
+                links: None,
+                base_href: None,
+                pin: None,
+                credentials_required: None,
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_add_device() {
         let plugin_id = String::from("plugin_id");
@@ -141,22 +176,8 @@ mod tests {
         let client = Arc::new(Mutex::new(MockClient::new()));
         let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
 
-        let description = DeviceDescription {
-            at_context: None,
-            at_type: None,
-            id: device_id.clone(),
-            title: None,
-            description: None,
-            properties: None,
-            actions: None,
-            events: None,
-            links: None,
-            base_href: None,
-            pin: None,
-            credentials_required: None,
-        };
-
-        let expected_description = description.clone();
+        let device_builder = MockDeviceBuilder::new(device_id.clone());
+        let expected_description = device_builder.description();
 
         client
             .lock()
@@ -173,10 +194,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter
-            .add_device(description, MockDevice::new)
-            .await
-            .unwrap();
+        adapter.add_device(device_builder).await.unwrap();
 
         assert!(adapter.get_device(&device_id).is_some())
     }
