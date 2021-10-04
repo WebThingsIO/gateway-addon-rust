@@ -21,10 +21,10 @@ use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
 use webthings_gateway_ipc_types::{
-    AdapterAddedNotificationMessageData, AdapterUnloadRequest, DeviceSavedNotification,
-    DeviceSetPropertyCommand, Message, PluginErrorNotificationMessageData,
-    PluginRegisterRequestMessageData, PluginUnloadRequest, PluginUnloadResponseMessageData,
-    Preferences, UserProfile,
+    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterStartPairingCommand,
+    AdapterUnloadRequest, DeviceSavedNotification, DeviceSetPropertyCommand, Message,
+    PluginErrorNotificationMessageData, PluginRegisterRequestMessageData, PluginUnloadRequest,
+    PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
 use webthings_gateway_ipc_types::{Message as IPCMessage, PluginRegisterResponseMessageData};
 
@@ -218,6 +218,36 @@ impl Plugin {
                     .lock()
                     .await
                     .on_device_saved(message.device_id, message.device)
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                Ok(MessageResult::Continue)
+            }
+            IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand {
+                message_type: _,
+                data: message,
+            }) => {
+                let adapter = self.borrow_adapter(&message.adapter_id)?;
+
+                adapter
+                    .lock()
+                    .await
+                    .on_start_pairing(Duration::from_secs(message.timeout as u64))
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                Ok(MessageResult::Continue)
+            }
+            IPCMessage::AdapterCancelPairingCommand(AdapterCancelPairingCommand {
+                message_type: _,
+                data: message,
+            }) => {
+                let adapter = self.borrow_adapter(&message.adapter_id)?;
+
+                adapter
+                    .lock()
+                    .await
+                    .on_cancel_pairing()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
 
