@@ -17,8 +17,8 @@ use webthings_gateway_ipc_types::{
     DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
 };
 
-#[async_trait(?Send)]
-pub trait Adapter {
+#[async_trait]
+pub trait Adapter: Send {
     fn get_adapter_handle(&self) -> &AdapterHandle;
 
     async fn on_device_saved(
