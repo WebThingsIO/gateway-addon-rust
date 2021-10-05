@@ -15,7 +15,7 @@ use webthings_gateway_ipc_types::Message as IPCMessage;
 use mockall::automock;
 
 #[cfg_attr(test, automock)]
-#[async_trait(?Send)]
+#[async_trait]
 pub trait Client {
     async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), ApiError>;
 }
@@ -39,7 +39,7 @@ impl WebsocketClient {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl Client for WebsocketClient {
     async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), ApiError> {
         let json = serde_json::to_string(msg).map_err(ApiError::Serialization)?;
