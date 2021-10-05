@@ -13,13 +13,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
-    AdapterUnloadResponseMessageData, Device as DeviceDescription,
-    DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
+    AdapterRemoveDeviceResponseMessageData, AdapterUnloadResponseMessageData,
+    Device as DeviceDescription, DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
 };
 
 #[async_trait(?Send)]
 pub trait Adapter {
-    fn get_adapter_handle(&self) -> &AdapterHandle;
+    fn get_adapter_handle(&mut self) -> &mut AdapterHandle;
 
     async fn on_device_saved(
         &mut self,
@@ -109,6 +109,24 @@ impl AdapterHandle {
         .into();
 
         self.client.lock().await.send_message(&message).await
+    }
+
+    pub async fn remove_device(&mut self, device_id: &str) -> Result<(), String> {
+        self.devices.remove(device_id);
+
+        let message: Message = AdapterRemoveDeviceResponseMessageData {
+            plugin_id: self.plugin_id.clone(),
+            adapter_id: self.adapter_id.clone(),
+            device_id: device_id.to_owned(),
+        }
+        .into();
+
+        self.client
+            .lock()
+            .await
+            .send_message(&message)
+            .await
+            .map_err(|err| format!("Could not send response: {}", err))
     }
 }
 
