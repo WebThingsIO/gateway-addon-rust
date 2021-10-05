@@ -36,6 +36,10 @@ pub trait Adapter {
     async fn on_cancel_pairing(&mut self) -> Result<(), String> {
         Ok(())
     }
+
+    async fn on_device_remove(&mut self, _device_id: String) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 pub trait DeviceBuilder<T: Device> {

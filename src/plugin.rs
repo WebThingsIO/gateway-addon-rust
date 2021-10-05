@@ -20,6 +20,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
+use webthings_gateway_ipc_types::AdapterRemoveDeviceRequest;
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterStartPairingCommand,
     AdapterUnloadRequest, DeviceSavedNotification, DeviceSetPropertyCommand, Message,
@@ -248,6 +249,21 @@ impl Plugin {
                     .lock()
                     .await
                     .on_cancel_pairing()
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                Ok(MessageResult::Continue)
+            }
+            IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest {
+                message_type: _,
+                data: message,
+            }) => {
+                let adapter = self.borrow_adapter(&message.adapter_id)?;
+
+                adapter
+                    .lock()
+                    .await
+                    .on_device_remove(message.device_id)
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
 
