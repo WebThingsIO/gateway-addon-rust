@@ -37,7 +37,7 @@ pub trait Adapter {
         Ok(())
     }
 
-    async fn on_device_remove(&mut self, _device_id: String) -> Result<(), String> {
+    async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
         Ok(())
     }
 }

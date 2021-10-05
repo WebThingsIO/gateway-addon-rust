@@ -263,7 +263,7 @@ impl Plugin {
                 adapter
                     .lock()
                     .await
-                    .on_device_remove(message.device_id.clone())
+                    .on_remove_device(message.device_id.clone())
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
 
