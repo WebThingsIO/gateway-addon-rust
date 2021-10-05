@@ -18,7 +18,7 @@ use webthings_gateway_ipc_types::{
 };
 
 #[async_trait]
-pub trait Adapter {
+pub trait Adapter: Send {
     fn get_adapter_handle(&self) -> &AdapterHandle;
 
     async fn on_device_saved(
