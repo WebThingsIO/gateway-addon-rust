@@ -20,12 +20,14 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
-use webthings_gateway_ipc_types::AdapterRemoveDeviceRequest;
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterStartPairingCommand,
     AdapterUnloadRequest, DeviceSavedNotification, DeviceSetPropertyCommand, Message,
     PluginErrorNotificationMessageData, PluginRegisterRequestMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
+};
+use webthings_gateway_ipc_types::{
+    AdapterRemoveDeviceRequest, AdapterRemoveDeviceResponseMessageData,
 };
 use webthings_gateway_ipc_types::{Message as IPCMessage, PluginRegisterResponseMessageData};
 
@@ -263,9 +265,23 @@ impl Plugin {
                 adapter
                     .lock()
                     .await
-                    .on_device_remove(message.device_id)
+                    .on_device_remove(message.device_id.clone())
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                let message: Message = AdapterRemoveDeviceResponseMessageData {
+                    plugin_id: self.plugin_id.clone(),
+                    adapter_id: message.adapter_id,
+                    device_id: message.device_id,
+                }
+                .into();
+
+                self.client
+                    .lock()
+                    .await
+                    .send_message(&message)
+                    .await
+                    .map_err(|err| format!("Could not send response: {}", err))?;
 
                 Ok(MessageResult::Continue)
             }
