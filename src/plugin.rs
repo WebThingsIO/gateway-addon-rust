@@ -100,7 +100,7 @@ pub struct Plugin {
     pub user_profile: UserProfile,
     client: Arc<Mutex<dyn Client>>,
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    adapters: HashMap<String, Arc<Mutex<dyn Adapter + Send>>>,
+    adapters: HashMap<String, Arc<Mutex<dyn Adapter>>>,
 }
 
 enum MessageResult {
@@ -279,10 +279,7 @@ impl Plugin {
         }
     }
 
-    fn borrow_adapter(
-        &mut self,
-        adapter_id: &str,
-    ) -> Result<&mut Arc<Mutex<dyn Adapter + Send>>, String> {
+    fn borrow_adapter(&mut self, adapter_id: &str) -> Result<&mut Arc<Mutex<dyn Adapter>>, String> {
         self.adapters
             .get_mut(adapter_id)
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
@@ -295,7 +292,7 @@ impl Plugin {
         constructor: F,
     ) -> Result<Arc<Mutex<T>>, ApiError>
     where
-        T: Adapter + 'static + Send,
+        T: Adapter + 'static,
         F: FnOnce(AdapterHandle) -> T,
     {
         let message: Message = AdapterAddedNotificationMessageData {

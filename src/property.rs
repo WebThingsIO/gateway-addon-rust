@@ -13,8 +13,8 @@ use webthings_gateway_ipc_types::{
     DevicePropertyChangedNotificationMessageData, Message, Property as PropertyDescription,
 };
 
-#[async_trait(?Send)]
-pub trait Property {
+#[async_trait]
+pub trait Property: Send {
     fn borrow_property_handle(&mut self) -> &mut PropertyHandle;
     async fn on_update(&mut self, _value: Value) -> Result<(), String> {
         Ok(())
