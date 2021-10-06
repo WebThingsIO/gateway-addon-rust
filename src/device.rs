@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{Device as DeviceDescription, Property as PropertyDescription};
 
 #[async_trait]
-pub trait Device {
+pub trait Device: Send {
     fn borrow_device_handle(&mut self) -> &mut DeviceHandle;
 }
 
