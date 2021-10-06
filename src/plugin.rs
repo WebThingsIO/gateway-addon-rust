@@ -260,7 +260,7 @@ impl Plugin {
             }) => {
                 let adapter = self.borrow_adapter(&message.adapter_id)?;
 
-                let adapter = adapter.lock().await;
+                let mut adapter = adapter.lock().await;
 
                 adapter
                     .on_remove_device(message.device_id.clone())
