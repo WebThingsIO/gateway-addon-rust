@@ -260,16 +260,14 @@ impl Plugin {
             }) => {
                 let adapter = self.borrow_adapter(&message.adapter_id)?;
 
+                let adapter = adapter.lock().await;
+                
                 adapter
-                    .lock()
-                    .await
                     .on_remove_device(message.device_id.clone())
                     .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+                    .map_err(|err| format!("Could not execute remove device callback: {}", err))?;
 
                 adapter
-                    .lock()
-                    .await
                     .get_adapter_handle()
                     .remove_device(&message.device_id)
                     .await
