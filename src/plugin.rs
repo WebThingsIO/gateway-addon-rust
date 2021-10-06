@@ -32,6 +32,7 @@ use webthings_gateway_ipc_types::{Message as IPCMessage, PluginRegisterResponseM
 const GATEWAY_URL: &str = "ws://localhost:9500";
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
+#[cfg(not(test))]
 pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
 
@@ -77,6 +78,36 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     })
 }
 
+#[cfg(test)]
+pub fn connect(plugin_id: &str) -> (Plugin, Arc<Mutex<crate::client::MockClient>>) {
+    let preferences = Preferences {
+        language: "en-US".to_owned(),
+        units: webthings_gateway_ipc_types::Units {
+            temperature: "degree celsius".to_owned(),
+        },
+    };
+    let user_profile = UserProfile {
+        addons_dir: "".to_owned(),
+        base_dir: "".to_owned(),
+        config_dir: "".to_owned(),
+        data_dir: "".to_owned(),
+        gateway_dir: "".to_owned(),
+        log_dir: "".to_owned(),
+        media_dir: "".to_owned(),
+    };
+    let client = Arc::new(Mutex::new(crate::client::MockClient::new()));
+    (
+        Plugin {
+            plugin_id: plugin_id.to_owned(),
+            preferences,
+            user_profile,
+            client: client.clone(),
+            adapters: HashMap::new(),
+        },
+        client,
+    )
+}
+
 async fn read(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> Option<Result<IPCMessage, String>> {
@@ -99,16 +130,19 @@ pub struct Plugin {
     pub preferences: Preferences,
     pub user_profile: UserProfile,
     client: Arc<Mutex<dyn Client>>,
+    #[cfg(not(test))]
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     adapters: HashMap<String, Arc<Mutex<dyn Adapter>>>,
 }
 
-enum MessageResult {
+#[doc(hidden)]
+pub(crate) enum MessageResult {
     Continue,
     Terminate,
 }
 
 impl Plugin {
+    #[cfg(not(test))]
     pub async fn event_loop(&mut self) {
         loop {
             match read(&mut self.stream).await {
@@ -127,7 +161,11 @@ impl Plugin {
         }
     }
 
-    async fn handle_message(&mut self, message: IPCMessage) -> Result<MessageResult, String> {
+    #[doc(hidden)]
+    pub(crate) async fn handle_message(
+        &mut self,
+        message: IPCMessage,
+    ) -> Result<MessageResult, String> {
         match message {
             IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
                 message_type: _,
@@ -279,7 +317,10 @@ impl Plugin {
         }
     }
 
-    fn borrow_adapter(&mut self, adapter_id: &str) -> Result<&mut Arc<Mutex<dyn Adapter>>, String> {
+    pub fn borrow_adapter(
+        &mut self,
+        adapter_id: &str,
+    ) -> Result<&mut Arc<Mutex<dyn Adapter>>, String> {
         self.adapters
             .get_mut(adapter_id)
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))

@@ -133,13 +133,32 @@ impl AdapterHandle {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::{AdapterHandle, DeviceBuilder},
+        adapter::{Adapter, AdapterHandle, DeviceBuilder},
         client::MockClient,
         device::{Device, DeviceHandle},
+        plugin::{connect, Plugin},
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{Device as DeviceDescription, Message};
+    use webthings_gateway_ipc_types::{
+        AdapterRemoveDeviceRequestMessageData, Device as DeviceDescription, Message,
+    };
+
+    struct MockAdapter {
+        adapter_handle: AdapterHandle,
+    }
+
+    impl MockAdapter {
+        pub fn new(adapter_handle: AdapterHandle) -> Self {
+            Self { adapter_handle }
+        }
+    }
+
+    impl Adapter for MockAdapter {
+        fn get_adapter_handle(&mut self) -> &mut AdapterHandle {
+            &mut self.adapter_handle
+        }
+    }
 
     struct MockDevice {
         device_handle: DeviceHandle,
@@ -190,16 +209,46 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_add_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let client = Arc::new(Mutex::new(MockClient::new()));
-        let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+    async fn create_mock_adapter(
+        plugin: &mut Plugin,
+        client: Arc<Mutex<MockClient>>,
+        adapter_id: &str,
+    ) -> Arc<Mutex<MockAdapter>> {
+        let plugin_id = plugin.plugin_id.to_owned();
+        let adapter_id_copy = adapter_id.to_owned();
 
-        let device_builder = MockDeviceBuilder::new(device_id.clone());
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterAddedNotification(msg) => {
+                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_copy
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin
+            .create_adapter(&adapter_id, &adapter_id, |adapter| {
+                MockAdapter::new(adapter)
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn create_mock_device(
+        adapter: Arc<Mutex<MockAdapter>>,
+        client: Arc<Mutex<MockClient>>,
+        device_id: &str,
+    ) -> Arc<Mutex<MockDevice>> {
+        let device_builder = MockDeviceBuilder::new(device_id.to_owned());
         let expected_description = device_builder.description();
+
+        let adapter = &mut adapter.lock().await.adapter_handle;
+        let plugin_id = adapter.plugin_id.to_owned();
+        let adapter_id = adapter.adapter_id.to_owned();
 
         client
             .lock()
@@ -216,17 +265,87 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter.add_device(device_builder).await.unwrap();
+        adapter.add_device(device_builder).await.unwrap()
+    }
 
-        assert!(adapter.get_device(&device_id).is_some())
+    #[tokio::test]
+    async fn test_create_adapter() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let (mut plugin, client) = connect(&plugin_id);
+        create_mock_adapter(&mut plugin, client, &adapter_id).await;
+        assert!(plugin.borrow_adapter(&adapter_id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_add_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let (mut plugin, client) = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
+        create_mock_device(adapter.clone(), client, &device_id).await;
+
+        assert!(adapter
+            .lock()
+            .await
+            .adapter_handle
+            .get_device(&device_id)
+            .is_some())
+    }
+
+    #[tokio::test]
+    async fn test_remove_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let device_id_copy = device_id.clone();
+        let (mut plugin, client) = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
+        create_mock_device(adapter.clone(), client.clone(), &device_id).await;
+
+        let message: Message = AdapterRemoveDeviceRequestMessageData {
+            device_id: device_id.clone(),
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.to_owned(),
+        }
+        .into();
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterRemoveDeviceResponse(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin
+            .handle_message(message)
+            .await
+            .expect("Handle message");
+
+        assert!(adapter
+            .lock()
+            .await
+            .adapter_handle
+            .get_device(&device_id_copy)
+            .is_none())
     }
 
     #[tokio::test]
     async fn test_unload() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
-        let client = Arc::new(Mutex::new(MockClient::new()));
-        let adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+
+        let (mut plugin, client) = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
 
         client
             .lock()
@@ -241,6 +360,6 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter.unload().await.unwrap();
+        adapter.lock().await.adapter_handle.unload().await.unwrap();
     }
 }
