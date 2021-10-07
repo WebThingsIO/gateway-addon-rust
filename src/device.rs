@@ -1,3 +1,4 @@
+use crate::adapter::PropertyBuilder;
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +10,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{Device as DeviceDescription, Property as PropertyDescription};
+use webthings_gateway_ipc_types::Device as DeviceDescription;
 
 #[async_trait]
 pub trait Device: Send {
@@ -22,7 +23,7 @@ pub struct DeviceHandle {
     pub plugin_id: String,
     pub adapter_id: String,
     pub description: DeviceDescription,
-    properties: HashMap<String, Arc<Mutex<dyn Property>>>,
+    properties: HashMap<String, Arc<Mutex<Box<dyn Property>>>>,
 }
 
 impl DeviceHandle {
@@ -41,15 +42,13 @@ impl DeviceHandle {
         }
     }
 
-    pub fn add_property<T, F>(
+    pub(crate) fn add_property(
         &mut self,
         name: String,
-        description: PropertyDescription,
-        constructor: F,
-    ) where
-        T: Property + 'static,
-        F: FnOnce(PropertyHandle) -> T,
-    {
+        property_builder: Box<dyn PropertyBuilder>,
+    ) {
+        let description = property_builder.description();
+
         let property_handle = PropertyHandle::new(
             self.client.clone(),
             self.plugin_id.clone(),
@@ -59,18 +58,19 @@ impl DeviceHandle {
             description,
         );
 
-        let property = Arc::new(Mutex::new(constructor(property_handle)));
+        let property = Arc::new(Mutex::new(property_builder.build(property_handle)));
 
         self.properties.insert(name, property);
     }
 
-    pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<dyn Property>>> {
+    pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn Property>>>> {
         self.properties.get(name).cloned()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::adapter::PropertyBuilder;
     use crate::client::MockClient;
     use crate::device::DeviceHandle;
     use crate::property::{Property, PropertyHandle};
@@ -79,6 +79,41 @@ mod tests {
     use webthings_gateway_ipc_types::{
         Device as DeviceDescription, Property as PropertyDescription,
     };
+
+    struct MockPropertyBuilder {
+        property_name: String,
+    }
+
+    impl MockPropertyBuilder {
+        pub fn new(property_name: String) -> Self {
+            Self { property_name }
+        }
+    }
+
+    impl PropertyBuilder for MockPropertyBuilder {
+        fn description(&self) -> PropertyDescription {
+            PropertyDescription {
+                at_type: None,
+                name: Some(self.property_name.clone()),
+                title: None,
+                description: None,
+                type_: String::from("integer"),
+                unit: None,
+                enum_: None,
+                links: None,
+                minimum: None,
+                maximum: None,
+                multiple_of: None,
+                read_only: None,
+                value: None,
+                visible: None,
+            }
+        }
+
+        fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property> {
+            Box::new(MockProperty::new(property_handle))
+        }
+    }
 
     struct MockProperty {
         property_handle: PropertyHandle,
@@ -121,27 +156,9 @@ mod tests {
 
         let mut device = DeviceHandle::new(client, plugin_id, adapter_id, device_description);
 
-        let property_description = PropertyDescription {
-            at_type: None,
-            name: Some(property_name.clone()),
-            title: None,
-            description: None,
-            type_: String::from("integer"),
-            unit: None,
-            enum_: None,
-            links: None,
-            minimum: None,
-            maximum: None,
-            multiple_of: None,
-            read_only: None,
-            value: None,
-            visible: None,
-        };
-
         device.add_property(
             property_name.clone(),
-            property_description,
-            MockProperty::new,
+            Box::new(MockPropertyBuilder::new(property_name.clone())),
         );
 
         assert!(device.get_property(&property_name).is_some())

@@ -3,18 +3,24 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::api_error::ApiError;
-use crate::client::Client;
-use crate::device;
-use crate::device::{Device, DeviceHandle};
+use crate::{
+    api_error::ApiError,
+    client::Client,
+    device::{self, Device, DeviceHandle},
+    device_description::DeviceDescription,
+    property::{Property, PropertyHandle},
+};
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     AdapterRemoveDeviceResponseMessageData, AdapterUnloadResponseMessageData,
-    Device as DeviceDescription, DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
+    Device as FullDeviceDescription, DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
+    Property as PropertyDescription,
 };
 
 #[async_trait]
@@ -45,6 +51,36 @@ pub trait Adapter: Send {
 pub trait DeviceBuilder<T: Device> {
     fn build(self, device_handle: DeviceHandle) -> T;
     fn description(&self) -> DeviceDescription;
+    fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>>;
+    fn id(&self) -> String;
+    fn full_description(&self) -> FullDeviceDescription {
+        let description = self.description();
+
+        let mut property_descriptions = BTreeMap::new();
+        for (name, property_builder) in self.properties() {
+            property_descriptions.insert(name, property_builder.description());
+        }
+
+        FullDeviceDescription {
+            at_context: description.at_context,
+            at_type: description.at_type,
+            id: self.id(),
+            title: description.title,
+            description: description.description,
+            properties: Some(property_descriptions),
+            actions: None,
+            events: None,
+            links: description.links,
+            base_href: description.base_href,
+            pin: description.pin,
+            credentials_required: description.credentials_required,
+        }
+    }
+}
+
+pub trait PropertyBuilder {
+    fn description(&self) -> PropertyDescription;
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
 }
 
 #[derive(Clone)]
@@ -70,7 +106,7 @@ impl AdapterHandle {
         D: Device + 'static,
         B: DeviceBuilder<D>,
     {
-        let device_description = device_builder.description();
+        let device_description = device_builder.full_description();
 
         let message: Message = DeviceAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -83,12 +119,16 @@ impl AdapterHandle {
 
         let id = device_description.id.clone();
 
-        let device_handle = device::DeviceHandle::new(
+        let mut device_handle = device::DeviceHandle::new(
             self.client.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             device_description,
         );
+
+        for (name, property_builder) in device_builder.properties() {
+            device_handle.add_property(name, property_builder);
+        }
 
         let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
 
@@ -133,16 +173,15 @@ impl AdapterHandle {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::{Adapter, AdapterHandle, DeviceBuilder},
+        adapter::{Adapter, AdapterHandle, DeviceBuilder, PropertyBuilder},
         client::MockClient,
         device::{Device, DeviceHandle},
+        device_description::DeviceDescription,
         plugin::{connect, Plugin},
     };
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{
-        AdapterRemoveDeviceRequestMessageData, Device as DeviceDescription, Message,
-    };
+    use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
 
     struct MockAdapter {
         adapter_handle: AdapterHandle,
@@ -195,17 +234,21 @@ mod tests {
             DeviceDescription {
                 at_context: None,
                 at_type: None,
-                id: self.device_id.clone(),
                 title: None,
                 description: None,
-                properties: None,
-                actions: None,
-                events: None,
                 links: None,
                 base_href: None,
                 pin: None,
                 credentials_required: None,
             }
+        }
+
+        fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>> {
+            HashMap::new()
+        }
+
+        fn id(&self) -> String {
+            self.device_id.clone()
         }
     }
 
@@ -244,7 +287,7 @@ mod tests {
         device_id: &str,
     ) -> Arc<Mutex<MockDevice>> {
         let device_builder = MockDeviceBuilder::new(device_id.to_owned());
-        let expected_description = device_builder.description();
+        let expected_description = device_builder.full_description();
 
         let adapter = &mut adapter.lock().await.adapter_handle;
         let plugin_id = adapter.plugin_id.to_owned();

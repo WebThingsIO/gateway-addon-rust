@@ -8,5 +8,6 @@ pub mod api_error;
 pub mod client;
 pub mod database;
 pub mod device;
+pub mod device_description;
 pub mod plugin;
 pub mod property;
