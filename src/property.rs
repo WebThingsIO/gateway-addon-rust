@@ -3,15 +3,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::api_error::ApiError;
-use crate::client::Client;
+use crate::{api_error::ApiError, client::Client, property_description::PropertyDescription};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{
-    DevicePropertyChangedNotificationMessageData, Message, Property as PropertyDescription,
-};
+use webthings_gateway_ipc_types::{DevicePropertyChangedNotificationMessageData, Message};
 
 #[async_trait]
 pub trait Property: Send {
