@@ -11,3 +11,4 @@ pub mod device;
 pub mod device_description;
 pub mod plugin;
 pub mod property;
+pub mod property_description;
