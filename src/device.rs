@@ -14,7 +14,7 @@ use webthings_gateway_ipc_types::Device as DeviceDescription;
 
 #[async_trait]
 pub trait Device: Send {
-    fn borrow_device_handle(&mut self) -> &mut DeviceHandle;
+    fn device_handle_mut(&mut self) -> &mut DeviceHandle;
 }
 
 #[derive(Clone)]
@@ -126,7 +126,7 @@ mod tests {
     }
 
     impl Property for MockProperty {
-        fn borrow_property_handle(&mut self) -> &mut PropertyHandle {
+        fn property_handle_mut(&mut self) -> &mut PropertyHandle {
             &mut self.property_handle
         }
     }

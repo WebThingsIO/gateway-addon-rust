@@ -176,14 +176,14 @@ impl Plugin {
                 let device = adapter
                     .lock()
                     .await
-                    .get_adapter_handle()
+                    .adapter_handle_mut()
                     .get_device(&message.device_id);
 
                 if let Some(device) = device {
                     let property = device
                         .lock()
                         .await
-                        .borrow_device_handle()
+                        .device_handle_mut()
                         .get_property(&message.property_name)
                         .ok_or_else(|| {
                             format!(
@@ -201,7 +201,7 @@ impl Plugin {
                     property
                         .lock()
                         .await
-                        .borrow_property_handle()
+                        .property_handle_mut()
                         .set_value(message.property_value.clone())
                         .map_err(|err| {
                             format!(
@@ -228,7 +228,7 @@ impl Plugin {
                 adapter
                     .lock()
                     .await
-                    .get_adapter_handle()
+                    .adapter_handle_mut()
                     .unload()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
@@ -306,7 +306,7 @@ impl Plugin {
                     .map_err(|err| format!("Could not execute remove device callback: {}", err))?;
 
                 adapter
-                    .get_adapter_handle()
+                    .adapter_handle_mut()
                     .remove_device(&message.device_id)
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
