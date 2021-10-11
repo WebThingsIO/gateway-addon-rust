@@ -6,21 +6,14 @@
 use crate::{
     api_error::ApiError,
     client::Client,
-    device::{self, Device, DeviceHandle},
-    device_description::DeviceDescription,
-    property::{Property, PropertyHandle},
+    device::{self, Device, DeviceBuilder},
 };
 use async_trait::async_trait;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     AdapterRemoveDeviceResponseMessageData, AdapterUnloadResponseMessageData,
-    Device as FullDeviceDescription, DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
-    Property as PropertyDescription,
+    DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
 };
 
 #[async_trait]
@@ -46,41 +39,6 @@ pub trait Adapter: Send {
     async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
         Ok(())
     }
-}
-
-pub trait DeviceBuilder<T: Device> {
-    fn build(self, device_handle: DeviceHandle) -> T;
-    fn description(&self) -> DeviceDescription;
-    fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>>;
-    fn id(&self) -> String;
-    fn full_description(&self) -> FullDeviceDescription {
-        let description = self.description();
-
-        let mut property_descriptions = BTreeMap::new();
-        for (name, property_builder) in self.properties() {
-            property_descriptions.insert(name, property_builder.description());
-        }
-
-        FullDeviceDescription {
-            at_context: description.at_context,
-            at_type: description.at_type,
-            id: self.id(),
-            title: description.title,
-            description: description.description,
-            properties: Some(property_descriptions),
-            actions: None,
-            events: None,
-            links: description.links,
-            base_href: description.base_href,
-            pin: description.pin,
-            credentials_required: description.credentials_required,
-        }
-    }
-}
-
-pub trait PropertyBuilder {
-    fn description(&self) -> PropertyDescription;
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
 }
 
 #[derive(Clone)]
@@ -173,11 +131,12 @@ impl AdapterHandle {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::{Adapter, AdapterHandle, DeviceBuilder, PropertyBuilder},
+        adapter::{Adapter, AdapterHandle},
         client::MockClient,
-        device::{Device, DeviceHandle},
+        device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
         plugin::{connect, Plugin},
+        property::PropertyBuilder,
     };
     use std::{collections::HashMap, sync::Arc};
     use tokio::sync::Mutex;
