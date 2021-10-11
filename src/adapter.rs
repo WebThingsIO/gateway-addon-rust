@@ -84,8 +84,8 @@ impl AdapterHandle {
             device_description,
         );
 
-        for (name, property_builder) in device_builder.properties() {
-            device_handle.add_property(name, property_builder);
+        for property_builder in device_builder.properties() {
+            device_handle.add_property(property_builder);
         }
 
         let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
@@ -138,7 +138,7 @@ mod tests {
         plugin::{connect, Plugin},
         property::PropertyBuilder,
     };
-    use std::{collections::HashMap, sync::Arc};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
 
@@ -193,8 +193,8 @@ mod tests {
             DeviceDescription::default()
         }
 
-        fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>> {
-            HashMap::new()
+        fn properties(&self) -> Vec<Box<dyn PropertyBuilder>> {
+            Vec::new()
         }
 
         fn id(&self) -> String {

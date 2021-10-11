@@ -64,6 +64,7 @@ impl PropertyHandle {
 
 pub trait PropertyBuilder {
     fn description(&self) -> PropertyDescription;
+    fn id(&self) -> String;
     fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
 }
 
