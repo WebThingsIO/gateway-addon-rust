@@ -1,16 +1,16 @@
-use crate::adapter::PropertyBuilder;
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::client::Client;
-use crate::property::{Property, PropertyHandle};
+use crate::device_description::DeviceDescription;
+use crate::property::{Property, PropertyBuilder, PropertyHandle};
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::Device as DeviceDescription;
+use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 #[async_trait]
 pub trait Device: Send {
@@ -22,7 +22,7 @@ pub struct DeviceHandle {
     client: Arc<Mutex<dyn Client>>,
     pub plugin_id: String,
     pub adapter_id: String,
-    pub description: DeviceDescription,
+    pub description: FullDeviceDescription,
     properties: HashMap<String, Arc<Mutex<Box<dyn Property>>>>,
 }
 
@@ -31,7 +31,7 @@ impl DeviceHandle {
         client: Arc<Mutex<dyn Client>>,
         plugin_id: String,
         adapter_id: String,
-        description: DeviceDescription,
+        description: FullDeviceDescription,
     ) -> Self {
         DeviceHandle {
             client,
@@ -68,12 +68,43 @@ impl DeviceHandle {
     }
 }
 
+pub trait DeviceBuilder<T: Device> {
+    fn build(self, device_handle: DeviceHandle) -> T;
+    fn description(&self) -> DeviceDescription;
+    fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>>;
+    fn id(&self) -> String;
+    fn full_description(&self) -> FullDeviceDescription {
+        let description = self.description();
+
+        let mut property_descriptions = BTreeMap::new();
+        for (name, property_builder) in self.properties() {
+            property_descriptions.insert(name, property_builder.description());
+        }
+
+        FullDeviceDescription {
+            at_context: description.at_context,
+            at_type: description.at_type,
+            id: self.id(),
+            title: description.title,
+            description: description.description,
+            properties: Some(property_descriptions),
+            actions: None,
+            events: None,
+            links: description.links,
+            base_href: description.base_href,
+            pin: description.pin,
+            credentials_required: description.credentials_required,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::adapter::PropertyBuilder;
-    use crate::client::MockClient;
-    use crate::device::DeviceHandle;
-    use crate::property::{Property, PropertyHandle};
+    use crate::{
+        client::MockClient,
+        device::DeviceHandle,
+        property::{Property, PropertyBuilder, PropertyHandle},
+    };
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{

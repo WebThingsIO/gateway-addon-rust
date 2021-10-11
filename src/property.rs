@@ -62,6 +62,11 @@ impl PropertyHandle {
     }
 }
 
+pub trait PropertyBuilder {
+    fn description(&self) -> PropertyDescription;
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::client::MockClient;
