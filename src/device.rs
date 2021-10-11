@@ -104,12 +104,11 @@ mod tests {
         client::MockClient,
         device::DeviceHandle,
         property::{Property, PropertyBuilder, PropertyHandle},
+        property_description::{PropertyDescription, PropertyDescriptionBuilder, Type},
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{
-        Device as DeviceDescription, Property as PropertyDescription,
-    };
+    use webthings_gateway_ipc_types::Device as DeviceDescription;
 
     struct MockPropertyBuilder {
         property_name: String,
@@ -123,22 +122,9 @@ mod tests {
 
     impl PropertyBuilder for MockPropertyBuilder {
         fn description(&self) -> PropertyDescription {
-            PropertyDescription {
-                at_type: None,
-                name: Some(self.property_name.clone()),
-                title: None,
-                description: None,
-                type_: String::from("integer"),
-                unit: None,
-                enum_: None,
-                links: None,
-                minimum: None,
-                maximum: None,
-                multiple_of: None,
-                read_only: None,
-                value: None,
-                visible: None,
-            }
+            PropertyDescription::default()
+                .name(&self.property_name)
+                .type_(Type::Integer)
         }
 
         fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property> {

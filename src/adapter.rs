@@ -134,7 +134,7 @@ mod tests {
         adapter::{Adapter, AdapterHandle},
         client::MockClient,
         device::{Device, DeviceBuilder, DeviceHandle},
-        device_description::DeviceDescription,
+        device_description::{DeviceDescription, DeviceDescriptionBuilder},
         plugin::{connect, Plugin},
         property::PropertyBuilder,
     };
@@ -190,16 +190,7 @@ mod tests {
         }
 
         fn description(&self) -> DeviceDescription {
-            DeviceDescription {
-                at_context: None,
-                at_type: None,
-                title: None,
-                description: None,
-                links: None,
-                base_href: None,
-                pin: None,
-                credentials_required: None,
-            }
+            DeviceDescription::default()
         }
 
         fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>> {
