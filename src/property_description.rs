@@ -1,5 +1,21 @@
 use serde_json::Value;
-pub use webthings_gateway_ipc_types::{Link, Property as PropertyDescription};
+pub use webthings_gateway_ipc_types::{Link, Property as FullPropertyDescription};
+
+pub struct PropertyDescription {
+    pub at_type: Option<String>,
+    pub description: Option<String>,
+    pub enum_: Option<Vec<Value>>,
+    pub links: Option<Vec<Link>>,
+    pub maximum: Option<f64>,
+    pub minimum: Option<f64>,
+    pub multiple_of: Option<f64>,
+    pub read_only: Option<bool>,
+    pub title: Option<String>,
+    pub type_: String,
+    pub unit: Option<String>,
+    pub value: Option<Value>,
+    pub visible: Option<bool>,
+}
 
 pub enum Type {
     Null,
@@ -70,7 +86,6 @@ pub trait PropertyDescriptionBuilder {
     fn maximum(self, maximum: f64) -> Self;
     fn minimum(self, minimum: f64) -> Self;
     fn multiple_of(self, multiple_of: f64) -> Self;
-    fn name<S: Into<String>>(self, name: S) -> Self;
     fn read_only(self, read_only: bool) -> Self;
     fn title<S: Into<String>>(self, title: S) -> Self;
     fn type_(self, type_: Type) -> Self;
@@ -124,11 +139,6 @@ impl PropertyDescriptionBuilder for PropertyDescription {
         self
     }
 
-    fn name<S: Into<String>>(mut self, name: S) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-
     fn read_only(mut self, read_only: bool) -> Self {
         self.read_only = Some(read_only);
         self
@@ -168,7 +178,6 @@ impl PropertyDescriptionBuilder for PropertyDescription {
             maximum: None,
             minimum: None,
             multiple_of: None,
-            name: None,
             read_only: None,
             title: None,
             type_: Type::Null.to_string(),

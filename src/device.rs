@@ -43,21 +43,21 @@ impl DeviceHandle {
     }
 
     pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilder>) {
-        let description = property_builder.description();
-        let id = property_builder.id();
+        let description = property_builder.full_description();
+        let name = property_builder.name();
 
         let property_handle = PropertyHandle::new(
             self.client.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             self.description.id.clone(),
-            id.clone(),
+            name.clone(),
             description,
         );
 
         let property = Arc::new(Mutex::new(property_builder.build(property_handle)));
 
-        self.properties.insert(id, property);
+        self.properties.insert(name, property);
     }
 
     pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn Property>>>> {
@@ -75,7 +75,8 @@ pub trait DeviceBuilder<T: Device> {
 
         let mut property_descriptions = BTreeMap::new();
         for property_builder in self.properties() {
-            property_descriptions.insert(property_builder.id(), property_builder.description());
+            property_descriptions
+                .insert(property_builder.name(), property_builder.full_description());
         }
 
         FullDeviceDescription {
@@ -119,16 +120,14 @@ mod tests {
 
     impl PropertyBuilder for MockPropertyBuilder {
         fn description(&self) -> PropertyDescription {
-            PropertyDescription::default()
-                .name(&self.property_name)
-                .type_(Type::Integer)
+            PropertyDescription::default().type_(Type::Integer)
         }
 
         fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property> {
             Box::new(MockProperty::new(property_handle))
         }
 
-        fn id(&self) -> String {
+        fn name(&self) -> String {
             self.property_name.to_owned()
         }
     }
