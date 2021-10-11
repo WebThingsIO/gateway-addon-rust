@@ -25,7 +25,7 @@ use webthings_gateway_ipc_types::{
 
 #[async_trait]
 pub trait Adapter: Send {
-    fn get_adapter_handle(&mut self) -> &mut AdapterHandle;
+    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
     async fn on_device_saved(
         &mut self,
@@ -194,7 +194,7 @@ mod tests {
     }
 
     impl Adapter for MockAdapter {
-        fn get_adapter_handle(&mut self) -> &mut AdapterHandle {
+        fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
             &mut self.adapter_handle
         }
     }
@@ -210,7 +210,7 @@ mod tests {
     }
 
     impl Device for MockDevice {
-        fn borrow_device_handle(&mut self) -> &mut DeviceHandle {
+        fn device_handle_mut(&mut self) -> &mut DeviceHandle {
             &mut self.device_handle
         }
     }
