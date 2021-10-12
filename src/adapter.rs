@@ -88,6 +88,10 @@ impl AdapterHandle {
             device_handle.add_property(property_builder);
         }
 
+        for action in device_builder.actions() {
+            device_handle.add_action(action);
+        }
+
         let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
 
         self.devices.insert(id, device.clone());

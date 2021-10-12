@@ -4,11 +4,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::{
+    action::{ActionBase, ActionHandle},
     client::Client,
     device_description::DeviceDescription,
     property::{Property, PropertyBuilder, PropertyHandle},
 };
 use async_trait::async_trait;
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -28,6 +30,7 @@ pub struct DeviceHandle {
     pub adapter_id: String,
     pub description: FullDeviceDescription,
     properties: HashMap<String, Arc<Mutex<Box<dyn Property>>>>,
+    actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
 }
 
 impl DeviceHandle {
@@ -43,6 +46,7 @@ impl DeviceHandle {
             adapter_id,
             description,
             properties: HashMap::new(),
+            actions: HashMap::new(),
         }
     }
 
@@ -67,12 +71,55 @@ impl DeviceHandle {
     pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn Property>>>> {
         self.properties.get(name).cloned()
     }
+
+    pub(crate) fn add_action(&mut self, action: Box<dyn ActionBase>) {
+        let name = action.name();
+
+        let action = Arc::new(Mutex::new(action));
+
+        self.actions.insert(name, action);
+    }
+
+    pub fn get_action(&self, name: &str) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
+        self.actions.get(name).cloned()
+    }
+
+    pub(crate) async fn request_action(
+        &self,
+        action_name: String,
+        action_id: String,
+        input: Value,
+    ) -> Result<(), String> {
+        let action = self.get_action(&action_name).ok_or_else(|| {
+            format!(
+                "Failed to request action {} of {}: not found",
+                action_name, self.description.id,
+            )
+        })?;
+        let mut action = action.lock().await;
+        let action_handle = ActionHandle::new(
+            self.client.clone(),
+            self.plugin_id.clone(),
+            self.adapter_id.clone(),
+            self.description.id.clone(),
+            action.name(),
+            action_id,
+            input.clone(),
+            input,
+        );
+        action.check_and_perform(action_handle).await
+    }
 }
 
 pub trait DeviceBuilder<T: Device> {
     fn build(self, device_handle: DeviceHandle) -> T;
     fn description(&self) -> DeviceDescription;
-    fn properties(&self) -> Vec<Box<dyn PropertyBuilder>>;
+    fn properties(&self) -> Vec<Box<dyn PropertyBuilder>> {
+        Vec::new()
+    }
+    fn actions(&self) -> Vec<Box<dyn ActionBase>> {
+        Vec::new()
+    }
     fn id(&self) -> String;
     fn full_description(&self) -> FullDeviceDescription {
         let description = self.description();
@@ -83,6 +130,11 @@ pub trait DeviceBuilder<T: Device> {
                 .insert(property_builder.name(), property_builder.full_description());
         }
 
+        let mut action_descriptions = BTreeMap::new();
+        for action in self.actions() {
+            action_descriptions.insert(action.name(), action.full_description());
+        }
+
         FullDeviceDescription {
             at_context: description.at_context,
             at_type: description.at_type,
@@ -90,7 +142,7 @@ pub trait DeviceBuilder<T: Device> {
             title: description.title,
             description: description.description,
             properties: Some(property_descriptions),
-            actions: None,
+            actions: Some(action_descriptions),
             events: None,
             links: description.links,
             base_href: description.base_href,
