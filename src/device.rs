@@ -155,11 +155,14 @@ pub trait DeviceBuilder<T: Device> {
 #[cfg(test)]
 mod tests {
     use crate::{
+        action::{Action, ActionHandle, NoInput},
+        action_description::{ActionDescription, ActionDescriptionBuilder},
         client::MockClient,
         device::DeviceHandle,
         property::{Property, PropertyBuilder, PropertyHandle},
         property_description::{PropertyDescription, PropertyDescriptionBuilder, Type},
     };
+    use async_trait::async_trait;
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Device as DeviceDescription;
@@ -204,6 +207,36 @@ mod tests {
         }
     }
 
+    struct MockAction {
+        action_name: String,
+    }
+
+    impl MockAction {
+        pub fn new(action_name: String) -> Self {
+            Self { action_name }
+        }
+    }
+
+    #[async_trait]
+    impl Action for MockAction {
+        type Input = NoInput;
+
+        fn name(&self) -> String {
+            self.action_name.to_owned()
+        }
+
+        fn description(&self) -> ActionDescription<Self::Input> {
+            ActionDescription::default()
+        }
+
+        async fn perform(
+            &mut self,
+            _action_handle: ActionHandle<Self::Input>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn test_add_property() {
         let plugin_id = String::from("plugin_id");
@@ -232,5 +265,35 @@ mod tests {
         device.add_property(Box::new(MockPropertyBuilder::new(property_name.clone())));
 
         assert!(device.get_property(&property_name).is_some())
+    }
+
+    #[test]
+    fn test_add_action() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let action_name = String::from("action_name");
+        let client = Arc::new(Mutex::new(MockClient::new()));
+
+        let device_description = DeviceDescription {
+            at_context: None,
+            at_type: None,
+            id: device_id,
+            title: None,
+            description: None,
+            properties: None,
+            actions: None,
+            events: None,
+            links: None,
+            base_href: None,
+            pin: None,
+            credentials_required: None,
+        };
+
+        let mut device = DeviceHandle::new(client, plugin_id, adapter_id, device_description);
+
+        device.add_action(Box::new(MockAction::new(action_name.to_owned())));
+
+        assert!(device.get_action(&action_name).is_some())
     }
 }

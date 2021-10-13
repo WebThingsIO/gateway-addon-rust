@@ -99,7 +99,7 @@ mod tests {
     use webthings_gateway_ipc_types::{Message, Property as PropertyDescription};
 
     #[tokio::test]
-    async fn test_unload() {
+    async fn test_set_value() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");

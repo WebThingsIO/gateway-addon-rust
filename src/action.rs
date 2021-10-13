@@ -209,3 +209,102 @@ impl<I: DeserializeOwned> ActionHandle<I> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::action::ActionHandle;
+    use crate::action::NoInput;
+    use crate::client::MockClient;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use webthings_gateway_ipc_types::Message;
+
+    #[tokio::test]
+    async fn test_action_start() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let action_name = String::from("action_name");
+        let action_id = String::from("action_id");
+        let client = Arc::new(Mutex::new(MockClient::new()));
+        let input = json!(null);
+
+        let mut action = ActionHandle::new(
+            client.clone(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            action_name.clone(),
+            action_id.clone(),
+            NoInput,
+            input.clone(),
+        );
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DeviceActionStatusNotification(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                        && msg.data.action.name == action_name
+                        && msg.data.action.id == action_id
+                        && msg.data.action.input == Some(input.clone())
+                        && msg.data.action.status == "pending"
+                        && msg.data.action.time_completed == None
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        action.start().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_action_finish() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let action_name = String::from("action_name");
+        let action_id = String::from("action_id");
+        let client = Arc::new(Mutex::new(MockClient::new()));
+        let input = json!(null);
+
+        let mut action = ActionHandle::new(
+            client.clone(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            action_name.clone(),
+            action_id.clone(),
+            NoInput,
+            input.clone(),
+        );
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DeviceActionStatusNotification(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                        && msg.data.action.name == action_name
+                        && msg.data.action.id == action_id
+                        && msg.data.action.input == Some(input.clone())
+                        && msg.data.action.status == "completed"
+                        && msg.data.action.time_completed.is_some()
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        action.finish().await.unwrap();
+    }
+}
