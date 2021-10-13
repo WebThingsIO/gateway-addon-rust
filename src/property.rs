@@ -65,9 +65,8 @@ impl PropertyHandle {
 }
 
 pub trait PropertyBuilder {
-    fn description(&self) -> PropertyDescription;
     fn name(&self) -> String;
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
+    fn description(&self) -> PropertyDescription;
     fn full_description(&self) -> FullPropertyDescription {
         let description = self.description();
 
@@ -88,6 +87,7 @@ pub trait PropertyBuilder {
             name: Some(self.name()),
         }
     }
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
 }
 
 #[cfg(test)]
