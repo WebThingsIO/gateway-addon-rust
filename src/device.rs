@@ -112,7 +112,7 @@ impl DeviceHandle {
 }
 
 pub trait DeviceBuilder<T: Device> {
-    fn build(self, device_handle: DeviceHandle) -> T;
+    fn id(&self) -> String;
     fn description(&self) -> DeviceDescription;
     fn properties(&self) -> Vec<Box<dyn PropertyBuilder>> {
         Vec::new()
@@ -120,7 +120,6 @@ pub trait DeviceBuilder<T: Device> {
     fn actions(&self) -> Vec<Box<dyn ActionBase>> {
         Vec::new()
     }
-    fn id(&self) -> String;
     fn full_description(&self) -> FullDeviceDescription {
         let description = self.description();
 
@@ -150,6 +149,7 @@ pub trait DeviceBuilder<T: Device> {
             credentials_required: description.credentials_required,
         }
     }
+    fn build(self, device_handle: DeviceHandle) -> T;
 }
 
 #[cfg(test)]

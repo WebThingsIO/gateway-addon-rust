@@ -74,14 +74,6 @@ impl<T: Action> ActionBase for T {
     fn name(&self) -> String {
         T::name(self)
     }
-
-    async fn check_and_perform(
-        &mut self,
-        action_handle: ActionHandle<Value>,
-    ) -> Result<(), String> {
-        T::check_and_perform(self, action_handle).await
-    }
-
     fn full_description(&self) -> FullActionDescription {
         FullActionDescription {
             at_type: self.description().at_type,
@@ -90,6 +82,12 @@ impl<T: Action> ActionBase for T {
             links: self.description().links,
             title: self.description().title,
         }
+    }
+    async fn check_and_perform(
+        &mut self,
+        action_handle: ActionHandle<Value>,
+    ) -> Result<(), String> {
+        T::check_and_perform(self, action_handle).await
     }
 }
 
