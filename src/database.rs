@@ -4,8 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::api_error::ApiError;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use sqlite::{Connection, Value};
 use std::path::PathBuf;
 

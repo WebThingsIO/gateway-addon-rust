@@ -69,8 +69,7 @@ pub trait PropertyBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::client::MockClient;
-    use crate::property::PropertyHandle;
+    use crate::{client::MockClient, property::PropertyHandle};
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;

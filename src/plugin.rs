@@ -3,31 +3,24 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::adapter::{Adapter, AdapterHandle};
-use crate::api_error::ApiError;
-use crate::client::{Client, WebsocketClient};
-use crate::database::Database;
-use futures::prelude::*;
-use futures::stream::SplitStream;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::process;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
-use tokio::time::sleep;
+use crate::{
+    adapter::{Adapter, AdapterHandle},
+    api_error::ApiError,
+    client::{Client, WebsocketClient},
+    database::Database,
+};
+use futures::{prelude::*, stream::SplitStream};
+use std::{collections::HashMap, path::PathBuf, process, str::FromStr, sync::Arc, time::Duration};
+use tokio::{net::TcpStream, sync::Mutex, time::sleep};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
-use webthings_gateway_ipc_types::AdapterRemoveDeviceRequest;
 use webthings_gateway_ipc_types::{
-    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterStartPairingCommand,
-    AdapterUnloadRequest, DeviceSavedNotification, DeviceSetPropertyCommand, Message,
-    PluginErrorNotificationMessageData, PluginRegisterRequestMessageData, PluginUnloadRequest,
+    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
+    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceSavedNotification,
+    DeviceSetPropertyCommand, Message, Message as IPCMessage, PluginErrorNotificationMessageData,
+    PluginRegisterRequestMessageData, PluginRegisterResponseMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
-use webthings_gateway_ipc_types::{Message as IPCMessage, PluginRegisterResponseMessageData};
 
 const GATEWAY_URL: &str = "ws://localhost:9500";
 const DONT_RESTART_EXIT_CODE: i32 = 100;
