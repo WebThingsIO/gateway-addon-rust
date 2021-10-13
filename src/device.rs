@@ -46,12 +46,9 @@ impl DeviceHandle {
         }
     }
 
-    pub(crate) fn add_property(
-        &mut self,
-        name: String,
-        property_builder: Box<dyn PropertyBuilder>,
-    ) {
-        let description = property_builder.description();
+    pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilder>) {
+        let description = property_builder.full_description();
+        let name = property_builder.name();
 
         let property_handle = PropertyHandle::new(
             self.client.clone(),
@@ -75,14 +72,15 @@ impl DeviceHandle {
 pub trait DeviceBuilder<T: Device> {
     fn build(self, device_handle: DeviceHandle) -> T;
     fn description(&self) -> DeviceDescription;
-    fn properties(&self) -> HashMap<String, Box<dyn PropertyBuilder>>;
+    fn properties(&self) -> Vec<Box<dyn PropertyBuilder>>;
     fn id(&self) -> String;
     fn full_description(&self) -> FullDeviceDescription {
         let description = self.description();
 
         let mut property_descriptions = BTreeMap::new();
-        for (name, property_builder) in self.properties() {
-            property_descriptions.insert(name, property_builder.description());
+        for property_builder in self.properties() {
+            property_descriptions
+                .insert(property_builder.name(), property_builder.full_description());
         }
 
         FullDeviceDescription {
@@ -126,13 +124,15 @@ mod tests {
 
     impl PropertyBuilder for MockPropertyBuilder {
         fn description(&self) -> PropertyDescription {
-            PropertyDescription::default()
-                .name(&self.property_name)
-                .type_(Type::Integer)
+            PropertyDescription::default().type_(Type::Integer)
         }
 
         fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property> {
             Box::new(MockProperty::new(property_handle))
+        }
+
+        fn name(&self) -> String {
+            self.property_name.to_owned()
         }
     }
 
@@ -177,10 +177,7 @@ mod tests {
 
         let mut device = DeviceHandle::new(client, plugin_id, adapter_id, device_description);
 
-        device.add_property(
-            property_name.clone(),
-            Box::new(MockPropertyBuilder::new(property_name.clone())),
-        );
+        device.add_property(Box::new(MockPropertyBuilder::new(property_name.clone())));
 
         assert!(device.get_property(&property_name).is_some())
     }

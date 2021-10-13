@@ -8,7 +8,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{DevicePropertyChangedNotificationMessageData, Message};
+use webthings_gateway_ipc_types::{
+    DevicePropertyChangedNotificationMessageData, Message, Property as FullPropertyDescription,
+};
 
 #[async_trait]
 pub trait Property: Send {
@@ -25,7 +27,7 @@ pub struct PropertyHandle {
     pub adapter_id: String,
     pub device_id: String,
     pub name: String,
-    pub description: PropertyDescription,
+    pub description: FullPropertyDescription,
 }
 
 impl PropertyHandle {
@@ -35,7 +37,7 @@ impl PropertyHandle {
         adapter_id: String,
         device_id: String,
         name: String,
-        description: PropertyDescription,
+        description: FullPropertyDescription,
     ) -> Self {
         PropertyHandle {
             client,
@@ -64,7 +66,28 @@ impl PropertyHandle {
 
 pub trait PropertyBuilder {
     fn description(&self) -> PropertyDescription;
+    fn name(&self) -> String;
     fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
+    fn full_description(&self) -> FullPropertyDescription {
+        let description = self.description();
+
+        FullPropertyDescription {
+            at_type: description.at_type,
+            description: description.description,
+            enum_: description.enum_,
+            links: description.links,
+            maximum: description.maximum,
+            minimum: description.minimum,
+            multiple_of: description.multiple_of,
+            read_only: description.read_only,
+            title: description.title,
+            type_: description.type_,
+            unit: description.unit,
+            value: description.value,
+            visible: description.visible,
+            name: Some(self.name()),
+        }
+    }
 }
 
 #[cfg(test)]
