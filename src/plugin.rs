@@ -16,8 +16,9 @@ use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
-    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceSavedNotification,
-    DeviceSetPropertyCommand, Message, Message as IPCMessage, PluginErrorNotificationMessageData,
+    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRequestActionRequest,
+    DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
+    Message, Message as IPCMessage, PluginErrorNotificationMessageData,
     PluginRegisterRequestMessageData, PluginRegisterResponseMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
@@ -303,6 +304,71 @@ impl Plugin {
                     .remove_device(&message.device_id)
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                Ok(MessageResult::Continue)
+            }
+            IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
+                message_type: _,
+                data: message,
+            }) => {
+                let adapter = self.borrow_adapter(&message.adapter_id)?;
+
+                let device = adapter
+                    .lock()
+                    .await
+                    .adapter_handle_mut()
+                    .get_device(&message.device_id);
+
+                if let Some(device) = device {
+                    let mut device = device.lock().await;
+                    let device_id = message.device_id;
+                    let action_name = message.action_name;
+                    let action_id = message.action_id;
+                    if let Err(err) = device
+                        .device_handle_mut()
+                        .request_action(action_name.clone(), action_id.clone(), message.input)
+                        .await
+                    {
+                        let message = DeviceRequestActionResponseMessageData {
+                            plugin_id: message.plugin_id,
+                            adapter_id: message.adapter_id,
+                            device_id: device_id.clone(),
+                            action_name: action_name.clone(),
+                            action_id: action_id.clone(),
+                            success: false,
+                        }
+                        .into();
+
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+
+                        return Err(format!(
+                            "Failed to request action {} for device {}: {:?}",
+                            action_name, device_id, err
+                        ));
+                    } else {
+                        let message = DeviceRequestActionResponseMessageData {
+                            plugin_id: message.plugin_id,
+                            adapter_id: message.adapter_id,
+                            device_id: device_id.clone(),
+                            action_name: action_name.clone(),
+                            action_id: action_id.clone(),
+                            success: true,
+                        }
+                        .into();
+
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+                    }
+                }
 
                 Ok(MessageResult::Continue)
             }
