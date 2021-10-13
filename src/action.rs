@@ -28,7 +28,7 @@ pub trait Action: Send {
         action_handle: ActionHandle<Value>,
     ) -> Result<(), String> {
         if let Some(ref input_schema) = self.description().input {
-            let schema = JSONSchema::compile(&input_schema).map_err(|err| {
+            let schema = JSONSchema::compile(input_schema).map_err(|err| {
                 format!(
                     "Failed to parse input schema for action {:?}: {:?}",
                     self.name(),
@@ -149,6 +149,7 @@ pub struct ActionHandle<T: DeserializeOwned> {
 }
 
 impl<I: DeserializeOwned> ActionHandle<I> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         client: Arc<Mutex<dyn Client>>,
         plugin_id: String,
@@ -166,8 +167,8 @@ impl<I: DeserializeOwned> ActionHandle<I> {
             device_id,
             name,
             id,
-            input: input,
-            input_: input_,
+            input,
+            input_,
             status: Status::Created,
             time_requested: SystemTime::now().into(),
             time_completed: None,
