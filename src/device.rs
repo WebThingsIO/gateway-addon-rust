@@ -3,12 +3,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::client::Client;
-use crate::device_description::DeviceDescription;
-use crate::property::{Property, PropertyBuilder, PropertyHandle};
+use crate::{
+    client::Client,
+    device_description::DeviceDescription,
+    property::{Property, PropertyBuilder, PropertyHandle},
+};
 use async_trait::async_trait;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 

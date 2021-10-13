@@ -5,8 +5,7 @@
  */
 use crate::api_error::ApiError;
 use async_trait::async_trait;
-use futures::prelude::*;
-use futures::stream::SplitSink;
+use futures::{prelude::*, stream::SplitSink};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 use webthings_gateway_ipc_types::Message as IPCMessage;
