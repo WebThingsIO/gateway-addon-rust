@@ -217,12 +217,12 @@ impl AdapterHandle {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::{Adapter, AdapterHandle},
+        adapter::{Adapter, AdapterBase, AdapterHandle},
         client::MockClient,
-        device::{Device, DeviceBuilder, DeviceHandle},
+        device::{Device, DeviceBase, DeviceBuilder, DeviceHandle},
         device_description::{DeviceDescription, DeviceDescriptionBuilder},
         plugin::{connect, Plugin},
-        property::PropertyBuilder,
+        property::PropertyBuilderBase,
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -270,8 +270,10 @@ mod tests {
         }
     }
 
-    impl DeviceBuilder<MockDevice> for MockDeviceBuilder {
-        fn build(self, device_handle: DeviceHandle) -> MockDevice {
+    impl DeviceBuilder for MockDeviceBuilder {
+        type Device = MockDevice;
+
+        fn build(self, device_handle: DeviceHandle) -> Self::Device {
             MockDevice::new(device_handle)
         }
 
@@ -279,7 +281,7 @@ mod tests {
             DeviceDescription::default()
         }
 
-        fn properties(&self) -> Vec<Box<dyn PropertyBuilder>> {
+        fn properties(&self) -> Vec<Box<dyn PropertyBuilderBase>> {
             Vec::new()
         }
 
@@ -292,7 +294,7 @@ mod tests {
         plugin: &mut Plugin,
         client: Arc<Mutex<MockClient>>,
         adapter_id: &str,
-    ) -> Arc<Mutex<MockAdapter>> {
+    ) -> Arc<Mutex<Box<dyn AdapterBase>>> {
         let plugin_id = plugin.plugin_id.to_owned();
         let adapter_id_copy = adapter_id.to_owned();
 
@@ -318,14 +320,15 @@ mod tests {
     }
 
     async fn create_mock_device(
-        adapter: Arc<Mutex<MockAdapter>>,
+        adapter: Arc<Mutex<Box<dyn AdapterBase>>>,
         client: Arc<Mutex<MockClient>>,
         device_id: &str,
-    ) -> Arc<Mutex<MockDevice>> {
+    ) -> Arc<Mutex<Box<dyn DeviceBase>>> {
         let device_builder = MockDeviceBuilder::new(device_id.to_owned());
         let expected_description = device_builder.full_description();
 
-        let adapter = &mut adapter.lock().await.adapter_handle;
+        let mut adapter = adapter.lock().await;
+        let adapter = adapter.adapter_handle_mut();
         let plugin_id = adapter.plugin_id.to_owned();
         let adapter_id = adapter.adapter_id.to_owned();
 
@@ -368,7 +371,7 @@ mod tests {
         assert!(adapter
             .lock()
             .await
-            .adapter_handle
+            .adapter_handle_mut()
             .get_device(&device_id)
             .is_some())
     }
@@ -413,7 +416,7 @@ mod tests {
         assert!(adapter
             .lock()
             .await
-            .adapter_handle
+            .adapter_handle_mut()
             .get_device(&device_id_copy)
             .is_none())
     }
@@ -439,6 +442,12 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter.lock().await.adapter_handle.unload().await.unwrap();
+        adapter
+            .lock()
+            .await
+            .adapter_handle_mut()
+            .unload()
+            .await
+            .unwrap();
     }
 }

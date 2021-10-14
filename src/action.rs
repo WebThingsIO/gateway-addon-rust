@@ -239,7 +239,7 @@ mod tests {
         client::MockClient,
     };
     use serde_json::json;
-    use std::sync::Arc;
+    use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
 
@@ -255,6 +255,7 @@ mod tests {
 
         let mut action = ActionHandle::new(
             client.clone(),
+            Weak::new(),
             plugin_id.clone(),
             adapter_id.clone(),
             device_id.clone(),
@@ -299,6 +300,7 @@ mod tests {
 
         let mut action = ActionHandle::new(
             client.clone(),
+            Weak::new(),
             plugin_id.clone(),
             adapter_id.clone(),
             device_id.clone(),

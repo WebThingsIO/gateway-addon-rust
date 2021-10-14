@@ -156,7 +156,7 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
 mod tests {
     use crate::{client::MockClient, property::PropertyHandle};
     use serde_json::json;
-    use std::sync::Arc;
+    use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{Message, Property as PropertyDescription};
 
@@ -188,6 +188,7 @@ mod tests {
 
         let mut property = PropertyHandle::new(
             client.clone(),
+            Weak::new(),
             plugin_id.clone(),
             adapter_id.clone(),
             device_id.clone(),

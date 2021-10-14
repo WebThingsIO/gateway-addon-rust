@@ -207,7 +207,7 @@ mod tests {
         property_description::{PropertyDescription, PropertyDescriptionBuilder, Type},
     };
     use async_trait::async_trait;
-    use std::sync::Arc;
+    use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Device as DeviceDescription;
 
@@ -222,12 +222,14 @@ mod tests {
     }
 
     impl PropertyBuilder for MockPropertyBuilder {
+        type Property = MockProperty;
+
         fn description(&self) -> PropertyDescription {
             PropertyDescription::default().type_(Type::Integer)
         }
 
-        fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property> {
-            Box::new(MockProperty::new(property_handle))
+        fn build(self: Box<Self>, property_handle: PropertyHandle) -> Self::Property {
+            MockProperty::new(property_handle)
         }
 
         fn name(&self) -> String {
@@ -304,7 +306,13 @@ mod tests {
             credentials_required: None,
         };
 
-        let mut device = DeviceHandle::new(client, plugin_id, adapter_id, device_description);
+        let mut device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_description,
+        );
 
         device.add_property(Box::new(MockPropertyBuilder::new(property_name.clone())));
 
@@ -334,7 +342,13 @@ mod tests {
             credentials_required: None,
         };
 
-        let mut device = DeviceHandle::new(client, plugin_id, adapter_id, device_description);
+        let mut device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_description,
+        );
 
         device.add_action(Box::new(MockAction::new(action_name.to_owned())));
 
