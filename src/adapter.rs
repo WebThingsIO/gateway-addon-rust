@@ -6,10 +6,15 @@
 use crate::{
     api_error::ApiError,
     client::Client,
-    device::{self, Device, DeviceBuilder},
+    device::{self, Device, DeviceBase, DeviceBuilder},
 };
 use async_trait::async_trait;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    any::Any,
+    collections::HashMap,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     AdapterRemoveDeviceResponseMessageData, AdapterUnloadResponseMessageData,
@@ -17,7 +22,7 @@ use webthings_gateway_ipc_types::{
 };
 
 #[async_trait]
-pub trait Adapter: Send {
+pub trait Adapter: Send + Sized + 'static {
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
     async fn on_device_saved(
@@ -39,30 +44,103 @@ pub trait Adapter: Send {
     async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[async_trait]
+pub trait AdapterBase: Send {
+    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
+
+    async fn on_device_saved(
+        &mut self,
+        _id: String,
+        _device_description: DeviceWithoutId,
+    ) -> Result<(), String>;
+
+    async fn on_start_pairing(&mut self, _timeout: Duration) -> Result<(), String>;
+
+    async fn on_cancel_pairing(&mut self) -> Result<(), String>;
+
+    async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String>;
+
+    fn as_any(&self) -> &dyn Any;
+
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+#[async_trait]
+impl<T: Adapter> AdapterBase for T {
+    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
+        T::adapter_handle_mut(self)
+    }
+
+    async fn on_device_saved(
+        &mut self,
+        id: String,
+        device_description: DeviceWithoutId,
+    ) -> Result<(), String> {
+        T::on_device_saved(self, id, device_description).await
+    }
+
+    async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String> {
+        T::on_start_pairing(self, timeout).await
+    }
+
+    async fn on_cancel_pairing(&mut self) -> Result<(), String> {
+        T::on_cancel_pairing(self).await
+    }
+
+    async fn on_remove_device(&mut self, device_id: String) -> Result<(), String> {
+        T::on_remove_device(self, device_id).await
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        T::as_any(self)
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        T::as_any_mut(self)
+    }
 }
 
 #[derive(Clone)]
 pub struct AdapterHandle {
     client: Arc<Mutex<dyn Client>>,
+    pub(crate) weak: Weak<Mutex<Box<dyn AdapterBase>>>,
     pub plugin_id: String,
     pub adapter_id: String,
-    devices: HashMap<String, Arc<Mutex<dyn Device>>>,
+    devices: HashMap<String, Arc<Mutex<Box<dyn DeviceBase>>>>,
 }
 
 impl AdapterHandle {
-    pub fn new(client: Arc<Mutex<dyn Client>>, plugin_id: String, adapter_id: String) -> Self {
+    pub(crate) fn new(
+        client: Arc<Mutex<dyn Client>>,
+        plugin_id: String,
+        adapter_id: String,
+    ) -> Self {
         Self {
             client,
+            weak: Weak::new(),
             plugin_id,
             adapter_id,
             devices: HashMap::new(),
         }
     }
 
-    pub async fn add_device<D, B>(&mut self, device_builder: B) -> Result<Arc<Mutex<D>>, ApiError>
+    pub async fn add_device<D, B>(
+        &mut self,
+        device_builder: B,
+    ) -> Result<Arc<Mutex<Box<dyn DeviceBase>>>, ApiError>
     where
         D: Device + 'static,
-        B: DeviceBuilder<D>,
+        B: DeviceBuilder<Device = D>,
     {
         let device_description = device_builder.full_description();
 
@@ -79,6 +157,7 @@ impl AdapterHandle {
 
         let mut device_handle = device::DeviceHandle::new(
             self.client.clone(),
+            self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             device_description,
@@ -92,14 +171,17 @@ impl AdapterHandle {
             device_handle.add_action(action);
         }
 
-        let device = Arc::new(Mutex::new(device_builder.build(device_handle)));
+        let device: Arc<Mutex<Box<dyn DeviceBase>>> =
+            Arc::new(Mutex::new(Box::new(device_builder.build(device_handle))));
+        let device_weak = Arc::downgrade(&device);
+        device.lock().await.device_handle_mut().weak = device_weak;
 
         self.devices.insert(id, device.clone());
 
         Ok(device)
     }
 
-    pub fn get_device(&self, id: &str) -> Option<Arc<Mutex<dyn Device>>> {
+    pub fn get_device(&self, id: &str) -> Option<Arc<Mutex<Box<dyn DeviceBase>>>> {
         self.devices.get(id).cloned()
     }
 

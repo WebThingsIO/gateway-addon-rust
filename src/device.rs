@@ -5,43 +5,76 @@
  */
 use crate::{
     action::{ActionBase, ActionHandle},
+    adapter::AdapterBase,
     client::Client,
     device_description::DeviceDescription,
-    property::{Property, PropertyBuilder, PropertyHandle},
+    property::{PropertyBase, PropertyBuilderBase, PropertyHandle},
 };
 use async_trait::async_trait;
 use serde_json::Value;
 use std::{
+    any::Any,
     collections::{BTreeMap, HashMap},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 #[async_trait]
-pub trait Device: Send {
+pub trait Device: Send + Sized + 'static {
     fn device_handle_mut(&mut self) -> &mut DeviceHandle;
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[async_trait]
+pub trait DeviceBase: Send {
+    fn device_handle_mut(&mut self) -> &mut DeviceHandle;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+#[async_trait]
+impl<T: Device> DeviceBase for T {
+    fn device_handle_mut(&mut self) -> &mut DeviceHandle {
+        T::device_handle_mut(self)
+    }
+    fn as_any(&self) -> &dyn Any {
+        T::as_any(self)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        T::as_any_mut(self)
+    }
 }
 
 #[derive(Clone)]
 pub struct DeviceHandle {
     client: Arc<Mutex<dyn Client>>,
+    pub(crate) weak: Weak<Mutex<Box<dyn DeviceBase>>>,
+    pub adapter: Weak<Mutex<Box<dyn AdapterBase>>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub description: FullDeviceDescription,
-    properties: HashMap<String, Arc<Mutex<Box<dyn Property>>>>,
+    properties: HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>>,
     actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
 }
 
 impl DeviceHandle {
-    pub fn new(
+    pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
+        adapter: Weak<Mutex<Box<dyn AdapterBase>>>,
         plugin_id: String,
         adapter_id: String,
         description: FullDeviceDescription,
     ) -> Self {
         DeviceHandle {
             client,
+            weak: Weak::new(),
+            adapter,
             plugin_id,
             adapter_id,
             description,
@@ -50,12 +83,13 @@ impl DeviceHandle {
         }
     }
 
-    pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilder>) {
+    pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilderBase>) {
         let description = property_builder.full_description();
         let name = property_builder.name();
 
         let property_handle = PropertyHandle::new(
             self.client.clone(),
+            self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             self.description.id.clone(),
@@ -68,7 +102,11 @@ impl DeviceHandle {
         self.properties.insert(name, property);
     }
 
-    pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn Property>>>> {
+    pub fn properties(&self) -> &HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>> {
+        &self.properties
+    }
+
+    pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
         self.properties.get(name).cloned()
     }
 
@@ -78,6 +116,10 @@ impl DeviceHandle {
         let action = Arc::new(Mutex::new(action));
 
         self.actions.insert(name, action);
+    }
+
+    pub fn actions(&self) -> &HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>> {
+        &self.actions
     }
 
     pub fn get_action(&self, name: &str) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
@@ -99,6 +141,7 @@ impl DeviceHandle {
         let mut action = action.lock().await;
         let action_handle = ActionHandle::new(
             self.client.clone(),
+            self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             self.description.id.clone(),
@@ -111,10 +154,11 @@ impl DeviceHandle {
     }
 }
 
-pub trait DeviceBuilder<T: Device> {
+pub trait DeviceBuilder {
+    type Device: Device;
     fn id(&self) -> String;
     fn description(&self) -> DeviceDescription;
-    fn properties(&self) -> Vec<Box<dyn PropertyBuilder>> {
+    fn properties(&self) -> Vec<Box<dyn PropertyBuilderBase>> {
         Vec::new()
     }
     fn actions(&self) -> Vec<Box<dyn ActionBase>> {
@@ -149,7 +193,7 @@ pub trait DeviceBuilder<T: Device> {
             credentials_required: description.credentials_required,
         }
     }
-    fn build(self, device_handle: DeviceHandle) -> T;
+    fn build(self, device_handle: DeviceHandle) -> Self::Device;
 }
 
 #[cfg(test)]

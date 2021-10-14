@@ -4,21 +4,27 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{action_description::ActionDescription, api_error::ApiError, client::Client};
+use crate::{
+    action_description::ActionDescription, api_error::ApiError, client::Client, device::DeviceBase,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use jsonschema::JSONSchema;
 use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    any::Any,
+    sync::{Arc, Weak},
+    time::SystemTime,
+};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     Action as FullActionDescription, DeviceActionStatusNotificationMessageData,
 };
 
 #[async_trait]
-pub trait Action: Send {
+pub trait Action: Send + Sized + 'static {
     type Input: DeserializeOwned + JsonSchema + Send;
     fn name(&self) -> String;
     fn description(&self) -> ActionDescription<Self::Input>;
@@ -49,6 +55,7 @@ pub trait Action: Send {
             })?;
         self.perform(ActionHandle::new(
             action_handle.client,
+            action_handle.device,
             action_handle.plugin_id,
             action_handle.adapter_id,
             action_handle.device_id,
@@ -59,6 +66,12 @@ pub trait Action: Send {
         ))
         .await
     }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -67,6 +80,8 @@ pub trait ActionBase: Send {
     fn full_description(&self) -> FullActionDescription;
     async fn check_and_perform(&mut self, action_handle: ActionHandle<Value>)
         -> Result<(), String>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 #[async_trait]
@@ -88,6 +103,12 @@ impl<T: Action> ActionBase for T {
         action_handle: ActionHandle<Value>,
     ) -> Result<(), String> {
         T::check_and_perform(self, action_handle).await
+    }
+    fn as_any(&self) -> &dyn Any {
+        T::as_any(self)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        T::as_any_mut(self)
     }
 }
 
@@ -134,6 +155,7 @@ impl ToString for Status {
 #[derive(Clone)]
 pub struct ActionHandle<T: DeserializeOwned> {
     client: Arc<Mutex<dyn Client>>,
+    pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub device_id: String,
@@ -148,8 +170,9 @@ pub struct ActionHandle<T: DeserializeOwned> {
 
 impl<I: DeserializeOwned> ActionHandle<I> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
+        device: Weak<Mutex<Box<dyn DeviceBase>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
@@ -160,6 +183,7 @@ impl<I: DeserializeOwned> ActionHandle<I> {
     ) -> Self {
         ActionHandle {
             client,
+            device,
             plugin_id,
             adapter_id,
             device_id,
@@ -210,9 +234,10 @@ impl<I: DeserializeOwned> ActionHandle<I> {
 
 #[cfg(test)]
 mod tests {
-    use crate::action::ActionHandle;
-    use crate::action::NoInput;
-    use crate::client::MockClient;
+    use crate::{
+        action::{ActionHandle, NoInput},
+        client::MockClient,
+    };
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;

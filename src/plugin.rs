@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::{
-    adapter::{Adapter, AdapterHandle},
+    adapter::{Adapter, AdapterBase, AdapterHandle},
     api_error::ApiError,
     client::{Client, WebsocketClient},
     database::Database,
@@ -126,7 +126,7 @@ pub struct Plugin {
     client: Arc<Mutex<dyn Client>>,
     #[cfg(not(test))]
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    adapters: HashMap<String, Arc<Mutex<dyn Adapter>>>,
+    adapters: HashMap<String, Arc<Mutex<Box<dyn AdapterBase>>>>,
 }
 
 #[doc(hidden)]
@@ -379,7 +379,7 @@ impl Plugin {
     pub fn borrow_adapter(
         &mut self,
         adapter_id: &str,
-    ) -> Result<&mut Arc<Mutex<dyn Adapter>>, String> {
+    ) -> Result<&mut Arc<Mutex<Box<dyn AdapterBase>>>, String> {
         self.adapters
             .get_mut(adapter_id)
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
@@ -390,7 +390,7 @@ impl Plugin {
         adapter_id: &str,
         name: &str,
         constructor: F,
-    ) -> Result<Arc<Mutex<T>>, ApiError>
+    ) -> Result<Arc<Mutex<Box<dyn AdapterBase>>>, ApiError>
     where
         T: Adapter + 'static,
         F: FnOnce(AdapterHandle) -> T,
@@ -411,8 +411,10 @@ impl Plugin {
             adapter_id.to_owned(),
         );
 
-        let adapter = Arc::new(Mutex::new(constructor(adapter_handle)));
-
+        let adapter: Arc<Mutex<Box<dyn AdapterBase>>> =
+            Arc::new(Mutex::new(Box::new(constructor(adapter_handle))));
+        let adapter_weak = Arc::downgrade(&adapter);
+        adapter.lock().await.adapter_handle_mut().weak = adapter_weak;
         self.adapters.insert(adapter_id.to_owned(), adapter.clone());
 
         Ok(adapter)
