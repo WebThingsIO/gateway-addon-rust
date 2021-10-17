@@ -199,8 +199,8 @@ pub trait DeviceBuilder {
 #[cfg(test)]
 mod tests {
     use crate::{
-        action::{Action, ActionHandle, NoInput},
-        action_description::ActionDescription,
+        action::{Action, ActionHandle},
+        action_description::{ActionDescription, NoInput},
         client::MockClient,
         device::DeviceHandle,
         property::{Property, PropertyBuilder, PropertyHandle},

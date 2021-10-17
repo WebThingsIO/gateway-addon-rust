@@ -5,13 +5,14 @@
  */
 
 use crate::{
-    action_description::ActionDescription, api_error::ApiError, client::Client, device::DeviceBase,
+    action_description::{ActionDescription, Input},
+    api_error::ApiError,
+    client::Client,
+    device::DeviceBase,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use jsonschema::JSONSchema;
-use schemars::JsonSchema;
-use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use std::{
     any::Any,
@@ -25,9 +26,18 @@ use webthings_gateway_ipc_types::{
 
 #[async_trait]
 pub trait Action: Send + Sized + 'static {
-    type Input: DeserializeOwned + JsonSchema + Send;
+    type Input: Input;
     fn name(&self) -> String;
     fn description(&self) -> ActionDescription<Self::Input>;
+    fn full_description(&self) -> FullActionDescription {
+        FullActionDescription {
+            at_type: self.description().at_type,
+            description: self.description().description,
+            input: self.description().input,
+            links: self.description().links,
+            title: self.description().title,
+        }
+    }
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String>;
     async fn check_and_perform(
         &mut self,
@@ -41,18 +51,16 @@ pub trait Action: Send + Sized + 'static {
                     err
                 )
             })?;
-            schema
-                .validate(&action_handle.input)
-                .map_err(|_| format!("Failed to validate input for action {:?}", self.name()))?;
-        }
-        let input: Self::Input =
-            serde_json::from_value(action_handle.input.clone()).map_err(|err| {
+            schema.validate(&action_handle.input).map_err(|err| {
                 format!(
-                    "Failed to parse input for action {:?}: {:?}",
+                    "Failed to validate input for action {:?}: {:?}",
                     self.name(),
-                    err
+                    err.collect::<Vec<_>>()
                 )
             })?;
+        }
+        let input = Self::Input::deserialize(action_handle.input.clone())
+            .map_err(|err| format!("Could not deserialize input: {:?}", err))?;
         self.perform(ActionHandle::new(
             action_handle.client,
             action_handle.device,
@@ -90,13 +98,7 @@ impl<T: Action> ActionBase for T {
         T::name(self)
     }
     fn full_description(&self) -> FullActionDescription {
-        FullActionDescription {
-            at_type: self.description().at_type,
-            description: self.description().description,
-            input: self.description().input,
-            links: self.description().links,
-            title: self.description().title,
-        }
+        T::full_description(self)
     }
     async fn check_and_perform(
         &mut self,
@@ -109,28 +111,6 @@ impl<T: Action> ActionBase for T {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         T::as_any_mut(self)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct NoInput;
-
-impl<'de> Deserialize<'de> for NoInput {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(NoInput)
-    }
-}
-
-impl JsonSchema for NoInput {
-    fn schema_name() -> String {
-        "no input".to_owned()
-    }
-
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        schemars::schema::Schema::Bool(true)
     }
 }
 
@@ -153,7 +133,7 @@ impl ToString for Status {
 }
 
 #[derive(Clone)]
-pub struct ActionHandle<T: DeserializeOwned> {
+pub struct ActionHandle<T: Input> {
     client: Arc<Mutex<dyn Client>>,
     pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
     pub plugin_id: String,
@@ -168,7 +148,7 @@ pub struct ActionHandle<T: DeserializeOwned> {
     pub time_completed: Option<DateTime<Utc>>,
 }
 
-impl<I: DeserializeOwned> ActionHandle<I> {
+impl<I: Input> ActionHandle<I> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
@@ -234,10 +214,7 @@ impl<I: DeserializeOwned> ActionHandle<I> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        action::{ActionHandle, NoInput},
-        client::MockClient,
-    };
+    use crate::{action::ActionHandle, action_description::NoInput, client::MockClient};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
