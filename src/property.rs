@@ -3,26 +3,63 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
-use crate::{api_error::ApiError, client::Client, property_description::PropertyDescription};
+use crate::{
+    api_error::ApiError, client::Client, device::DeviceBase,
+    property_description::PropertyDescription,
+};
 use async_trait::async_trait;
 use serde_json::Value;
-use std::sync::Arc;
+use std::{
+    any::Any,
+    sync::{Arc, Weak},
+};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
     DevicePropertyChangedNotificationMessageData, Message, Property as FullPropertyDescription,
 };
 
 #[async_trait]
-pub trait Property: Send {
+pub trait Property: Send + Sized + 'static {
     fn property_handle_mut(&mut self) -> &mut PropertyHandle;
     async fn on_update(&mut self, _value: Value) -> Result<(), String> {
         Ok(())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[async_trait]
+pub trait PropertyBase: Send {
+    fn property_handle_mut(&mut self) -> &mut PropertyHandle;
+    async fn on_update(&mut self, _value: Value) -> Result<(), String>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+#[async_trait]
+impl<T: Property> PropertyBase for T {
+    fn property_handle_mut(&mut self) -> &mut PropertyHandle {
+        T::property_handle_mut(self)
+    }
+    async fn on_update(&mut self, value: Value) -> Result<(), String> {
+        T::on_update(self, value).await
+    }
+    fn as_any(&self) -> &dyn Any {
+        T::as_any(self)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        T::as_any_mut(self)
     }
 }
 
 #[derive(Clone)]
 pub struct PropertyHandle {
     client: Arc<Mutex<dyn Client>>,
+    pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub device_id: String,
@@ -31,8 +68,9 @@ pub struct PropertyHandle {
 }
 
 impl PropertyHandle {
-    pub fn new(
+    pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
+        device: Weak<Mutex<Box<dyn DeviceBase>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
@@ -41,6 +79,7 @@ impl PropertyHandle {
     ) -> Self {
         PropertyHandle {
             client,
+            device,
             plugin_id,
             adapter_id,
             device_id,
@@ -65,6 +104,7 @@ impl PropertyHandle {
 }
 
 pub trait PropertyBuilder {
+    type Property: Property;
     fn name(&self) -> String;
     fn description(&self) -> PropertyDescription;
     fn full_description(&self) -> FullPropertyDescription {
@@ -87,14 +127,36 @@ pub trait PropertyBuilder {
             name: Some(self.name()),
         }
     }
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn Property>;
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Self::Property;
+}
+
+pub trait PropertyBuilderBase {
+    fn name(&self) -> String;
+    fn description(&self) -> PropertyDescription;
+    fn full_description(&self) -> FullPropertyDescription;
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn PropertyBase>;
+}
+
+impl<T: PropertyBuilder> PropertyBuilderBase for T {
+    fn name(&self) -> String {
+        T::name(self)
+    }
+    fn description(&self) -> PropertyDescription {
+        T::description(self)
+    }
+    fn full_description(&self) -> FullPropertyDescription {
+        T::full_description(self)
+    }
+    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn PropertyBase> {
+        Box::new(T::build(self, property_handle))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{client::MockClient, property::PropertyHandle};
     use serde_json::json;
-    use std::sync::Arc;
+    use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{Message, Property as PropertyDescription};
 
@@ -126,6 +188,7 @@ mod tests {
 
         let mut property = PropertyHandle::new(
             client.clone(),
+            Weak::new(),
             plugin_id.clone(),
             adapter_id.clone(),
             device_id.clone(),
