@@ -155,7 +155,7 @@ impl AdapterHandle {
 
         let id = device_description.id.clone();
 
-        let mut device_handle = device::DeviceHandle::new(
+        let device_handle = device::DeviceHandle::new(
             self.client.clone(),
             self.weak.clone(),
             self.plugin_id.clone(),
@@ -163,18 +163,26 @@ impl AdapterHandle {
             device_description,
         );
 
-        for property_builder in device_builder.properties() {
-            device_handle.add_property(property_builder);
-        }
-
-        for action in device_builder.actions() {
-            device_handle.add_action(action);
-        }
+        let properties = device_builder.properties();
+        let actions = device_builder.actions();
 
         let device: Arc<Mutex<Box<dyn DeviceBase>>> =
             Arc::new(Mutex::new(Box::new(device_builder.build(device_handle))));
         let device_weak = Arc::downgrade(&device);
-        device.lock().await.device_handle_mut().weak = device_weak;
+
+        {
+            let mut device = device.lock().await;
+            let device_handle = device.device_handle_mut();
+            device_handle.weak = device_weak;
+
+            for property_builder in properties {
+                device_handle.add_property(property_builder);
+            }
+
+            for action in actions {
+                device_handle.add_action(action);
+            }
+        }
 
         self.devices.insert(id, device.clone());
 
