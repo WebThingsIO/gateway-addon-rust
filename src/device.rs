@@ -156,11 +156,11 @@ pub trait DeviceBuilder<T: Device> {
 mod tests {
     use crate::{
         action::{Action, ActionHandle, NoInput},
-        action_description::{ActionDescription, ActionDescriptionBuilder},
+        action_description::ActionDescription,
         client::MockClient,
         device::DeviceHandle,
         property::{Property, PropertyBuilder, PropertyHandle},
-        property_description::{PropertyDescription, PropertyDescriptionBuilder, Type},
+        property_description::{PropertyDescription, Type},
     };
     use async_trait::async_trait;
     use std::sync::Arc;
