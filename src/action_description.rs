@@ -32,38 +32,28 @@ impl ToString for AtType {
     }
 }
 
-pub trait ActionDescriptionBuilder {
-    fn at_type(self, at_type: AtType) -> Self;
-    fn description<S: Into<String>>(self, description: S) -> Self;
-    fn input(self, input: Value) -> Self;
-    fn links(self, links: Vec<Link>) -> Self;
-    fn link(self, links: Link) -> Self;
-    fn title<S: Into<String>>(self, title: S) -> Self;
-    fn default() -> Self;
-}
-
-impl<I: JsonSchema> ActionDescriptionBuilder for ActionDescription<I> {
-    fn at_type(mut self, at_type: AtType) -> Self {
+impl<I: JsonSchema> ActionDescription<I> {
+    pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type.to_string());
         self
     }
 
-    fn description<S: Into<String>>(mut self, description: S) -> Self {
+    pub fn description<S: Into<String>>(mut self, description: S) -> Self {
         self.description = Some(description.into());
         self
     }
 
-    fn input(mut self, input: Value) -> Self {
+    pub fn input(mut self, input: Value) -> Self {
         self.input = Some(input);
         self
     }
 
-    fn links(mut self, links: Vec<Link>) -> Self {
+    pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
     }
 
-    fn link(mut self, link: Link) -> Self {
+    pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
             Some(ref mut links) => links.push(link),
@@ -71,12 +61,12 @@ impl<I: JsonSchema> ActionDescriptionBuilder for ActionDescription<I> {
         self
     }
 
-    fn title<S: Into<String>>(mut self, title: S) -> Self {
+    pub fn title<S: Into<String>>(mut self, title: S) -> Self {
         self.title = Some(title.into());
         self
     }
 
-    fn default() -> Self {
+    pub fn default() -> Self {
         let input = schema_for!(I);
         let input = if &I::schema_name() == "no input" {
             None

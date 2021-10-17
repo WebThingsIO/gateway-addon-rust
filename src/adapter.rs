@@ -228,7 +228,7 @@ mod tests {
         adapter::{Adapter, AdapterBase, AdapterHandle},
         client::MockClient,
         device::{Device, DeviceBase, DeviceBuilder, DeviceHandle},
-        device_description::{DeviceDescription, DeviceDescriptionBuilder},
+        device_description::DeviceDescription,
         plugin::{connect, Plugin},
         property::PropertyBuilderBase,
     };
