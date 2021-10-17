@@ -6,9 +6,10 @@
 use crate::{
     action::{ActionBase, ActionHandle},
     adapter::AdapterBase,
+    api_error::ApiError,
     client::Client,
     device_description::DeviceDescription,
-    property::{PropertyBase, PropertyBuilderBase, PropertyHandle},
+    property::{PropertyBase, PropertyBuilderBase},
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -87,7 +88,7 @@ impl DeviceHandle {
         let description = property_builder.full_description();
         let name = property_builder.name();
 
-        let property_handle = PropertyHandle::new(
+        let property = Arc::new(Mutex::new(property_builder.build(
             self.client.clone(),
             self.weak.clone(),
             self.plugin_id.clone(),
@@ -95,9 +96,7 @@ impl DeviceHandle {
             self.description.id.clone(),
             name.clone(),
             description,
-        );
-
-        let property = Arc::new(Mutex::new(property_builder.build(property_handle)));
+        )));
 
         self.properties.insert(name, property);
     }
@@ -108,6 +107,16 @@ impl DeviceHandle {
 
     pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
         self.properties.get(name).cloned()
+    }
+
+    pub async fn set_property_value(&self, name: &str, data: Value) -> Result<(), ApiError> {
+        if let Some(property) = self.properties.get(name) {
+            let mut property = property.lock().await;
+            property.property_handle_mut().set_value(data).await?;
+            Ok(())
+        } else {
+            Err(ApiError::UnknownProperty)
+        }
     }
 
     pub(crate) fn add_action(&mut self, action: Box<dyn ActionBase>) {
@@ -204,7 +213,7 @@ mod tests {
         client::MockClient,
         device::DeviceHandle,
         property::{Property, PropertyBuilder, PropertyHandle},
-        property_description::{PropertyDescription, Type},
+        property_description::PropertyDescription,
     };
     use async_trait::async_trait;
     use std::sync::{Arc, Weak};
@@ -223,12 +232,13 @@ mod tests {
 
     impl PropertyBuilder for MockPropertyBuilder {
         type Property = MockProperty;
+        type Value = i32;
 
-        fn description(&self) -> PropertyDescription {
-            PropertyDescription::default().type_(Type::Integer)
+        fn description(&self) -> PropertyDescription<Self::Value> {
+            PropertyDescription::default()
         }
 
-        fn build(self: Box<Self>, property_handle: PropertyHandle) -> Self::Property {
+        fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
             MockProperty::new(property_handle)
         }
 
@@ -238,17 +248,18 @@ mod tests {
     }
 
     struct MockProperty {
-        property_handle: PropertyHandle,
+        property_handle: PropertyHandle<i32>,
     }
 
     impl MockProperty {
-        pub fn new(property_handle: PropertyHandle) -> Self {
+        pub fn new(property_handle: PropertyHandle<i32>) -> Self {
             MockProperty { property_handle }
         }
     }
 
     impl Property for MockProperty {
-        fn property_handle_mut(&mut self) -> &mut PropertyHandle {
+        type Value = i32;
+        fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
             &mut self.property_handle
         }
     }

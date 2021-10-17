@@ -4,13 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::{
-    api_error::ApiError, client::Client, device::DeviceBase,
-    property_description::PropertyDescription,
+    api_error::ApiError,
+    client::Client,
+    device::DeviceBase,
+    property_description::{PropertyDescription, Value},
 };
 use async_trait::async_trait;
-use serde_json::Value;
 use std::{
     any::Any,
+    marker::PhantomData,
     sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
@@ -20,8 +22,9 @@ use webthings_gateway_ipc_types::{
 
 #[async_trait]
 pub trait Property: Send + Sized + 'static {
-    fn property_handle_mut(&mut self) -> &mut PropertyHandle;
-    async fn on_update(&mut self, _value: Value) -> Result<(), String> {
+    type Value: Value;
+    fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value>;
+    async fn on_update(&mut self, _value: Self::Value) -> Result<(), String> {
         Ok(())
     }
     fn as_any(&self) -> &dyn Any {
@@ -34,18 +37,20 @@ pub trait Property: Send + Sized + 'static {
 
 #[async_trait]
 pub trait PropertyBase: Send {
-    fn property_handle_mut(&mut self) -> &mut PropertyHandle;
-    async fn on_update(&mut self, _value: Value) -> Result<(), String>;
+    fn property_handle_mut(&mut self) -> &mut dyn PropertyHandleBase;
+    async fn on_update(&mut self, value: serde_json::Value) -> Result<(), String>;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 #[async_trait]
 impl<T: Property> PropertyBase for T {
-    fn property_handle_mut(&mut self) -> &mut PropertyHandle {
+    fn property_handle_mut(&mut self) -> &mut dyn PropertyHandleBase {
         T::property_handle_mut(self)
     }
-    async fn on_update(&mut self, value: Value) -> Result<(), String> {
+    async fn on_update(&mut self, value: serde_json::Value) -> Result<(), String> {
+        let value = serde_json::from_value(value)
+            .map_err(|err| format!("Could not deserialize value: {:?}", err))?;
         T::on_update(self, value).await
     }
     fn as_any(&self) -> &dyn Any {
@@ -57,7 +62,7 @@ impl<T: Property> PropertyBase for T {
 }
 
 #[derive(Clone)]
-pub struct PropertyHandle {
+pub struct PropertyHandle<T: Value> {
     client: Arc<Mutex<dyn Client>>,
     pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
     pub plugin_id: String,
@@ -65,9 +70,10 @@ pub struct PropertyHandle {
     pub device_id: String,
     pub name: String,
     pub description: FullPropertyDescription,
+    pub _value: PhantomData<T>,
 }
 
-impl PropertyHandle {
+impl<T: Value> PropertyHandle<T> {
     pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
         device: Weak<Mutex<Box<dyn DeviceBase>>>,
@@ -85,10 +91,24 @@ impl PropertyHandle {
             device_id,
             name,
             description,
+            _value: PhantomData,
         }
     }
 
-    pub async fn set_value(&mut self, value: Value) -> Result<(), ApiError> {
+    pub async fn set_value(&mut self, value: T) -> Result<(), ApiError> {
+        let value = serde_json::to_value(value).map_err(ApiError::Serialization)?;
+        PropertyHandleBase::set_value(self, value).await
+    }
+}
+
+#[async_trait]
+pub trait PropertyHandleBase: Send {
+    async fn set_value(&mut self, value: serde_json::Value) -> Result<(), ApiError>;
+}
+
+#[async_trait]
+impl<T: Value> PropertyHandleBase for PropertyHandle<T> {
+    async fn set_value(&mut self, value: serde_json::Value) -> Result<(), ApiError> {
         self.description.value = Some(value);
 
         let message: Message = DevicePropertyChangedNotificationMessageData {
@@ -104,9 +124,10 @@ impl PropertyHandle {
 }
 
 pub trait PropertyBuilder {
-    type Property: Property;
+    type Property: Property<Value = Self::Value>;
+    type Value: Value;
     fn name(&self) -> String;
-    fn description(&self) -> PropertyDescription;
+    fn description(&self) -> PropertyDescription<Self::Value>;
     fn full_description(&self) -> FullPropertyDescription {
         let description = self.description();
 
@@ -127,28 +148,77 @@ pub trait PropertyBuilder {
             name: Some(self.name()),
         }
     }
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Self::Property;
+    fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property;
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    fn build_(
+        self: Box<Self>,
+        client: Arc<Mutex<dyn Client>>,
+        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        plugin_id: String,
+        adapter_id: String,
+        device_id: String,
+        name: String,
+        description: FullPropertyDescription,
+    ) -> Self::Property {
+        let property_handle = PropertyHandle::<Self::Value>::new(
+            client,
+            device,
+            plugin_id,
+            adapter_id,
+            device_id,
+            name,
+            description,
+        );
+        self.build(property_handle)
+    }
 }
 
 pub trait PropertyBuilderBase {
     fn name(&self) -> String;
-    fn description(&self) -> PropertyDescription;
     fn full_description(&self) -> FullPropertyDescription;
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn PropertyBase>;
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        self: Box<Self>,
+        client: Arc<Mutex<dyn Client>>,
+        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        plugin_id: String,
+        adapter_id: String,
+        device_id: String,
+        name: String,
+        description: FullPropertyDescription,
+    ) -> Box<dyn PropertyBase>;
 }
 
 impl<T: PropertyBuilder> PropertyBuilderBase for T {
     fn name(&self) -> String {
         T::name(self)
     }
-    fn description(&self) -> PropertyDescription {
-        T::description(self)
-    }
     fn full_description(&self) -> FullPropertyDescription {
         T::full_description(self)
     }
-    fn build(self: Box<Self>, property_handle: PropertyHandle) -> Box<dyn PropertyBase> {
-        Box::new(T::build(self, property_handle))
+    #[doc(hidden)]
+    fn build(
+        self: Box<Self>,
+        client: Arc<Mutex<dyn Client>>,
+        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        plugin_id: String,
+        adapter_id: String,
+        device_id: String,
+        name: String,
+        description: FullPropertyDescription,
+    ) -> Box<dyn PropertyBase> {
+        Box::new(T::build_(
+            self,
+            client,
+            device,
+            plugin_id,
+            adapter_id,
+            device_id,
+            name,
+            description,
+        ))
     }
 }
 
