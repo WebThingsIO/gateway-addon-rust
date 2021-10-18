@@ -147,6 +147,19 @@ impl<T: Data> Data for Vec<T> {
     }
 }
 
+impl<T: Data> Data for Option<T> {
+    fn type_() -> Option<String> {
+        T::type_()
+    }
+    fn serialize(self) -> Result<Option<Value>, ApiError> {
+        Ok(if let Some(value) = self {
+            Some(serde_json::to_value(value).map_err(ApiError::Serialization)?)
+        } else {
+            None
+        })
+    }
+}
+
 #[derive(Debug)]
 pub enum AtType {
     AlarmEvent,
