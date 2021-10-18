@@ -4,13 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use serde_json::Value;
+use std::marker::PhantomData;
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use webthings_gateway_ipc_types::{Link, Property as FullPropertyDescription};
 
-pub struct PropertyDescription {
+pub struct PropertyDescription<T: Value> {
     pub at_type: Option<String>,
     pub description: Option<String>,
-    pub enum_: Option<Vec<Value>>,
+    pub enum_: Option<Vec<serde_json::Value>>,
     pub links: Option<Vec<Link>>,
     pub maximum: Option<f64>,
     pub minimum: Option<f64>,
@@ -19,28 +21,132 @@ pub struct PropertyDescription {
     pub title: Option<String>,
     pub type_: String,
     pub unit: Option<String>,
-    pub value: Option<Value>,
+    pub value: Option<serde_json::Value>,
     pub visible: Option<bool>,
+    _value: PhantomData<T>,
 }
 
-pub enum Type {
-    Null,
-    Boolean,
-    Integer,
-    Number,
-    String,
+pub trait Value: Clone + Send + Sync + Serialize + DeserializeOwned + Sized {
+    fn type_() -> String;
+    fn description(_description: &mut PropertyDescription<Self>) {}
 }
 
-impl ToString for Type {
-    fn to_string(&self) -> String {
-        match self {
-            Type::Null => "null",
-            Type::Boolean => "boolean",
-            Type::Integer => "integer",
-            Type::Number => "number",
-            Type::String => "string",
-        }
-        .to_owned()
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Null;
+
+impl Value for Null {
+    fn type_() -> String {
+        "null".to_owned()
+    }
+}
+
+impl Value for i8 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for i16 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for i32 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for u8 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for u16 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for u32 {
+    fn type_() -> String {
+        "integer".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for f32 {
+    fn type_() -> String {
+        "number".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN.into());
+        description.maximum = Some(Self::MAX.into());
+    }
+}
+
+impl Value for f64 {
+    fn type_() -> String {
+        "number".to_owned()
+    }
+    fn description(description: &mut PropertyDescription<Self>) {
+        description.minimum = Some(Self::MIN);
+        description.maximum = Some(Self::MAX);
+    }
+}
+
+impl Value for bool {
+    fn type_() -> String {
+        "boolean".to_owned()
+    }
+}
+
+impl Value for String {
+    fn type_() -> String {
+        "string".to_owned()
+    }
+}
+
+impl Value for serde_json::Value {
+    fn type_() -> String {
+        "object".to_owned()
+    }
+}
+
+impl<T: Value> Value for Vec<T> {
+    fn type_() -> String {
+        "array".to_owned()
+    }
+}
+
+impl<T: Value> Value for Option<T> {
+    fn type_() -> String {
+        T::type_()
     }
 }
 
@@ -83,7 +189,7 @@ impl ToString for AtType {
     }
 }
 
-impl PropertyDescription {
+impl<T: Value> PropertyDescription<T> {
     pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type.to_string());
         self
@@ -94,7 +200,7 @@ impl PropertyDescription {
         self
     }
 
-    pub fn enum_(mut self, enum_: Vec<Value>) -> Self {
+    pub fn enum_(mut self, enum_: Vec<serde_json::Value>) -> Self {
         self.enum_ = Some(enum_);
         self
     }
@@ -137,8 +243,8 @@ impl PropertyDescription {
         self
     }
 
-    pub fn type_(mut self, type_: Type) -> Self {
-        self.type_ = type_.to_string();
+    pub fn type_<S: Into<String>>(mut self, type_: S) -> Self {
+        self.type_ = type_.into();
         self
     }
 
@@ -147,7 +253,12 @@ impl PropertyDescription {
         self
     }
 
-    pub fn value<V: Into<Value>>(mut self, value: V) -> Self {
+    pub fn value(mut self, value: T) -> Self {
+        self.value = Some(serde_json::to_value(value).unwrap());
+        self
+    }
+
+    pub fn value_<V: Into<serde_json::Value>>(mut self, value: V) -> Self {
         self.value = Some(value.into());
         self
     }
@@ -158,7 +269,7 @@ impl PropertyDescription {
     }
 
     pub fn default() -> Self {
-        Self {
+        let mut description = Self {
             at_type: None,
             description: None,
             enum_: None,
@@ -168,10 +279,13 @@ impl PropertyDescription {
             multiple_of: None,
             read_only: None,
             title: None,
-            type_: Type::Null.to_string(),
+            type_: T::type_(),
             unit: None,
             value: None,
             visible: None,
-        }
+            _value: PhantomData,
+        };
+        T::description(&mut description);
+        description
     }
 }

@@ -18,4 +18,7 @@ pub enum ApiError {
 
     #[error("Failed to access database")]
     Database(#[source] sqlite::Error),
+
+    #[error("Unknown property")]
+    UnknownProperty,
 }
