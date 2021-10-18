@@ -51,7 +51,7 @@ pub struct Null;
 
 impl Input for Null {
     fn input() -> Option<Value> {
-        Some(Value::String("null".to_owned()))
+        Some(json!({"type": "null"}))
     }
 }
 
