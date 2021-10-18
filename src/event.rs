@@ -172,6 +172,17 @@ impl<D: Data + 'static> EventHandleBase for EventHandle<D> {
     }
 }
 
+pub type Events = Vec<Box<dyn EventBase>>;
+
+#[macro_export]
+macro_rules! events [
+    ($($e:expr),*) => ({
+        let mut _temp = $crate::event::Events::new();
+        $(_temp.push(Box::new($e));)*
+        _temp
+    })
+];
+
 #[cfg(test)]
 mod tests {
     use crate::{client::MockClient, event::EventHandle};

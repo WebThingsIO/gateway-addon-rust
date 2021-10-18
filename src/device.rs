@@ -4,13 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::{
-    action::{ActionBase, ActionHandle},
+    action::{ActionBase, ActionHandle, Actions},
+    actions,
     adapter::AdapterBase,
     api_error::ApiError,
     client::Client,
     device_description::DeviceDescription,
-    event::{EventBase, EventHandleBase},
-    property::{PropertyBase, PropertyBuilderBase},
+    event::{EventBase, EventHandleBase, Events},
+    events, properties,
+    property::{Properties, PropertyBase, PropertyBuilderBase},
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -205,14 +207,14 @@ pub trait DeviceBuilder {
     type Device: Device;
     fn id(&self) -> String;
     fn description(&self) -> DeviceDescription;
-    fn properties(&self) -> Vec<Box<dyn PropertyBuilderBase>> {
-        Vec::new()
+    fn properties(&self) -> Properties {
+        properties![]
     }
-    fn actions(&self) -> Vec<Box<dyn ActionBase>> {
-        Vec::new()
+    fn actions(&self) -> Actions {
+        actions![]
     }
-    fn events(&self) -> Vec<Box<dyn EventBase>> {
-        Vec::new()
+    fn events(&self) -> Events {
+        events![]
     }
     fn full_description(&self) -> FullDeviceDescription {
         let description = self.description();
