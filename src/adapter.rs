@@ -165,6 +165,7 @@ impl AdapterHandle {
 
         let properties = device_builder.properties();
         let actions = device_builder.actions();
+        let events = device_builder.events();
 
         let device: Arc<Mutex<Box<dyn DeviceBase>>> =
             Arc::new(Mutex::new(Box::new(device_builder.build(device_handle))));
@@ -181,6 +182,10 @@ impl AdapterHandle {
 
             for action in actions {
                 device_handle.add_action(action);
+            }
+
+            for event in events {
+                device_handle.add_event(event);
             }
         }
 

@@ -9,6 +9,7 @@ use crate::{
     api_error::ApiError,
     client::Client,
     device_description::DeviceDescription,
+    event::{EventBase, EventHandleBase},
     property::{PropertyBase, PropertyBuilderBase},
 };
 use async_trait::async_trait;
@@ -62,6 +63,7 @@ pub struct DeviceHandle {
     pub description: FullDeviceDescription,
     properties: HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>>,
     actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
+    events: HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>>,
 }
 
 impl DeviceHandle {
@@ -81,6 +83,7 @@ impl DeviceHandle {
             description,
             properties: HashMap::new(),
             actions: HashMap::new(),
+            events: HashMap::new(),
         }
     }
 
@@ -161,6 +164,41 @@ impl DeviceHandle {
         );
         action.check_and_perform(action_handle).await
     }
+
+    pub(crate) fn add_event(&mut self, event: Box<dyn EventBase>) {
+        let name = event.name();
+
+        let event_handle = event.build_event_handle(
+            self.client.clone(),
+            self.weak.clone(),
+            self.plugin_id.clone(),
+            self.adapter_id.clone(),
+            self.description.id.clone(),
+            name.clone(),
+        );
+
+        let event = Arc::new(Mutex::new(event_handle));
+
+        self.events.insert(name, event);
+    }
+
+    pub fn events(&self) -> &HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>> {
+        &self.events
+    }
+
+    pub fn get_event(&self, name: &str) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
+        self.events.get(name).cloned()
+    }
+
+    pub async fn raise_event(&self, name: &str, data: Option<Value>) -> Result<(), ApiError> {
+        if let Some(event) = self.events.get(name) {
+            let event = event.lock().await;
+            event.raise(data).await?;
+            Ok(())
+        } else {
+            Err(ApiError::UnknownEvent)
+        }
+    }
 }
 
 pub trait DeviceBuilder {
@@ -171,6 +209,9 @@ pub trait DeviceBuilder {
         Vec::new()
     }
     fn actions(&self) -> Vec<Box<dyn ActionBase>> {
+        Vec::new()
+    }
+    fn events(&self) -> Vec<Box<dyn EventBase>> {
         Vec::new()
     }
     fn full_description(&self) -> FullDeviceDescription {
@@ -187,6 +228,11 @@ pub trait DeviceBuilder {
             action_descriptions.insert(action.name(), action.full_description());
         }
 
+        let mut event_descriptions = BTreeMap::new();
+        for event in self.events() {
+            event_descriptions.insert(event.name(), event.full_description());
+        }
+
         FullDeviceDescription {
             at_context: description.at_context,
             at_type: description.at_type,
@@ -195,7 +241,7 @@ pub trait DeviceBuilder {
             description: description.description,
             properties: Some(property_descriptions),
             actions: Some(action_descriptions),
-            events: None,
+            events: Some(event_descriptions),
             links: description.links,
             base_href: description.base_href,
             pin: description.pin,
@@ -212,6 +258,8 @@ mod tests {
         action_description::{ActionDescription, NoInput},
         client::MockClient,
         device::DeviceHandle,
+        event::Event,
+        event_description::EventDescription,
         property::{Property, PropertyBuilder, PropertyHandle},
         property_description::PropertyDescription,
     };
@@ -294,6 +342,28 @@ mod tests {
         }
     }
 
+    struct MockEvent {
+        event_name: String,
+    }
+
+    impl MockEvent {
+        pub fn new(event_name: String) -> Self {
+            Self { event_name }
+        }
+    }
+
+    impl Event for MockEvent {
+        type Data = u32;
+
+        fn name(&self) -> String {
+            self.event_name.clone()
+        }
+
+        fn description(&self) -> EventDescription<Self::Data> {
+            todo!()
+        }
+    }
+
     #[test]
     fn test_add_property() {
         let plugin_id = String::from("plugin_id");
@@ -364,5 +434,41 @@ mod tests {
         device.add_action(Box::new(MockAction::new(action_name.to_owned())));
 
         assert!(device.get_action(&action_name).is_some())
+    }
+
+    #[test]
+    fn test_add_event() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let event_name = String::from("event_name");
+        let client = Arc::new(Mutex::new(MockClient::new()));
+
+        let device_description = DeviceDescription {
+            at_context: None,
+            at_type: None,
+            id: device_id,
+            title: None,
+            description: None,
+            properties: None,
+            actions: None,
+            events: None,
+            links: None,
+            base_href: None,
+            pin: None,
+            credentials_required: None,
+        };
+
+        let mut device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_description,
+        );
+
+        device.add_event(Box::new(MockEvent::new(event_name.to_owned())));
+
+        assert!(device.get_event(&event_name).is_some())
     }
 }

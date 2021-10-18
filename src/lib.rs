@@ -11,6 +11,8 @@ pub mod client;
 pub mod database;
 pub mod device;
 pub mod device_description;
+pub mod event;
+pub mod event_description;
 pub mod plugin;
 pub mod property;
 pub mod property_description;

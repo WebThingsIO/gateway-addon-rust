@@ -21,4 +21,7 @@ pub enum ApiError {
 
     #[error("Unknown property")]
     UnknownProperty,
+
+    #[error("Unknown event")]
+    UnknownEvent,
 }
