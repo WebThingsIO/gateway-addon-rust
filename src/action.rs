@@ -212,6 +212,17 @@ impl<I: Input> ActionHandle<I> {
     }
 }
 
+pub type Actions = Vec<Box<dyn ActionBase>>;
+
+#[macro_export]
+macro_rules! actions [
+    ($($e:expr),*) => ({
+        let mut _temp = $crate::action::Actions::new();
+        $(_temp.push(Box::new($e));)*
+        _temp
+    })
+];
+
 #[cfg(test)]
 mod tests {
     use crate::{action::ActionHandle, action_description::NoInput, client::MockClient};

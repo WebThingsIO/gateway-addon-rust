@@ -222,6 +222,17 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
     }
 }
 
+pub type Properties = Vec<Box<dyn PropertyBuilderBase>>;
+
+#[macro_export]
+macro_rules! properties [
+    ($($e:expr),*) => ({
+        let mut _temp = $crate::property::Properties::new();
+        $(_temp.push(Box::new($e));)*
+        _temp
+    })
+];
+
 #[cfg(test)]
 mod tests {
     use crate::{client::MockClient, property::PropertyHandle};
