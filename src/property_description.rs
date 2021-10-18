@@ -144,6 +144,12 @@ impl<T: Value> Value for Vec<T> {
     }
 }
 
+impl<T: Value> Value for Option<T> {
+    fn type_() -> String {
+        T::type_()
+    }
+}
+
 #[derive(Debug)]
 pub enum AtType {
     AlarmProperty,
