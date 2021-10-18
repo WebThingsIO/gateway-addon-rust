@@ -168,6 +168,12 @@ impl<T: Input> Input for Vec<T> {
     }
 }
 
+impl<T: Input> Input for Option<T> {
+    fn input() -> Option<Value> {
+        T::input()
+    }
+}
+
 #[derive(Debug)]
 pub enum AtType {
     FadeAction,
