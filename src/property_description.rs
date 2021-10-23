@@ -225,7 +225,7 @@ impl<T: Value> Value for Option<T> {
         description.description = t_description.description;
         description.enum_ = t_description
             .enum_
-            .map(|e| e.into_iter().map(|t| Some(t)).collect());
+            .map(|e| e.into_iter().map(Some).collect());
         description.links = t_description.links;
         description.maximum = t_description.maximum;
         description.minimum = t_description.minimum;
