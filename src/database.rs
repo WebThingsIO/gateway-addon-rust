@@ -6,24 +6,26 @@
 use crate::api_error::ApiError;
 use serde::{de::DeserializeOwned, Serialize};
 use sqlite::{Connection, Value};
-use std::path::PathBuf;
+use std::{marker::PhantomData, path::PathBuf};
 
-pub struct Database {
-    path: PathBuf,
-    plugin_id: String,
+pub struct Database<T: Serialize + DeserializeOwned> {
+    pub path: PathBuf,
+    pub plugin_id: String,
+    _config: PhantomData<T>,
 }
 
-impl Database {
+impl<T: Serialize + DeserializeOwned> Database<T> {
     pub fn new(mut path: PathBuf, plugin_id: String) -> Self {
         path.push("db.sqlite3");
 
-        Self { path, plugin_id }
+        Self {
+            path,
+            plugin_id,
+            _config: PhantomData,
+        }
     }
 
-    pub fn load_config<T>(&self) -> Result<Option<T>, ApiError>
-    where
-        T: DeserializeOwned,
-    {
+    pub fn load_config(&self) -> Result<Option<T>, ApiError> {
         let json = self.load_string()?;
 
         match json {
@@ -54,10 +56,7 @@ impl Database {
         Ok(s)
     }
 
-    pub fn save_config<T>(&self, t: &T) -> Result<(), ApiError>
-    where
-        T: Serialize,
-    {
+    pub fn save_config(&self, t: &T) -> Result<(), ApiError> {
         let json = serde_json::to_string(t).map_err(ApiError::Serialization)?;
         self.save_string(json)?;
         Ok(())

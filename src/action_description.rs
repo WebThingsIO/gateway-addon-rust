@@ -6,57 +6,82 @@
 
 use crate::api_error::ApiError;
 use schemars::{schema_for, JsonSchema};
-use serde::{de::DeserializeOwned, Deserialize};
-use serde_json::{json, Value};
+use serde::de::{DeserializeOwned, Error};
+use serde_json::json;
 use std::marker::PhantomData;
-use webthings_gateway_ipc_types::Link;
+use webthings_gateway_ipc_types::{Action as FullActionDescription, Link};
 
-pub struct ActionDescription<I: JsonSchema> {
-    pub at_type: Option<String>,
+#[derive(Clone)]
+pub struct ActionDescription<T: Input> {
+    pub at_type: Option<AtType>,
     pub description: Option<String>,
-    pub input: Option<Value>,
+    pub input: Option<serde_json::Value>,
     pub links: Option<Vec<Link>>,
     pub title: Option<String>,
-    pub _input: PhantomData<I>,
+    pub _input: PhantomData<T>,
 }
 
-pub trait Input: Clone + Send + Sync + DeserializeOwned + JsonSchema + Sized {
-    fn input() -> Option<Value> {
+pub trait Input: Clone + Send + Sync + 'static {
+    fn input() -> Option<serde_json::Value> {
+        Some(json!({
+            "type": "object",
+        }))
+    }
+
+    fn description(description: ActionDescription<Self>) -> ActionDescription<Self> {
+        description
+    }
+
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError>;
+}
+
+pub trait SimpleInput: DeserializeOwned + JsonSchema + Clone + Send + Sync + 'static {
+    fn input() -> Option<serde_json::Value> {
         if let Ok(schema) = serde_json::to_value(&schema_for!(Self)) {
             Some(schema)
         } else {
             None
         }
     }
-    fn deserialize(value: Value) -> Result<Self, ApiError> {
+
+    fn description(description: ActionDescription<Self>) -> ActionDescription<Self> {
+        description
+    }
+
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
         serde_json::from_value(value).map_err(ApiError::Serialization)
     }
 }
 
-#[derive(Clone, Deserialize, JsonSchema)]
+impl<T: SimpleInput> Input for T {
+    fn input() -> Option<serde_json::Value> {
+        <T as SimpleInput>::input()
+    }
+
+    fn description(description: ActionDescription<Self>) -> ActionDescription<Self> {
+        <T as SimpleInput>::description(description)
+    }
+
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+        <T as SimpleInput>::deserialize(value)
+    }
+}
+
+#[derive(Clone)]
 pub struct NoInput;
 
 impl Input for NoInput {
-    fn input() -> Option<Value> {
+    fn input() -> Option<serde_json::Value> {
         None
     }
 
-    fn deserialize(_value: Value) -> Result<Self, ApiError> {
+    fn deserialize(_value: serde_json::Value) -> Result<Self, ApiError> {
         Ok(NoInput)
     }
 }
 
-#[derive(Clone, Deserialize, JsonSchema)]
-pub struct Null;
-
-impl Input for Null {
-    fn input() -> Option<Value> {
-        Some(json!({"type": "null"}))
-    }
-}
-
-impl Input for i8 {
-    fn input() -> Option<Value> {
+impl SimpleInput for i8 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -65,8 +90,8 @@ impl Input for i8 {
     }
 }
 
-impl Input for i16 {
-    fn input() -> Option<Value> {
+impl SimpleInput for i16 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -75,8 +100,8 @@ impl Input for i16 {
     }
 }
 
-impl Input for i32 {
-    fn input() -> Option<Value> {
+impl SimpleInput for i32 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -85,8 +110,8 @@ impl Input for i32 {
     }
 }
 
-impl Input for u8 {
-    fn input() -> Option<Value> {
+impl SimpleInput for u8 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -95,8 +120,8 @@ impl Input for u8 {
     }
 }
 
-impl Input for u16 {
-    fn input() -> Option<Value> {
+impl SimpleInput for u16 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -105,8 +130,8 @@ impl Input for u16 {
     }
 }
 
-impl Input for u32 {
-    fn input() -> Option<Value> {
+impl SimpleInput for u32 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "integer",
             "minimum": Self::MIN,
@@ -115,8 +140,8 @@ impl Input for u32 {
     }
 }
 
-impl Input for f32 {
-    fn input() -> Option<Value> {
+impl SimpleInput for f32 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "number",
             "minimum": Self::MIN,
@@ -125,8 +150,8 @@ impl Input for f32 {
     }
 }
 
-impl Input for f64 {
-    fn input() -> Option<Value> {
+impl SimpleInput for f64 {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "number",
             "minimum": Self::MIN,
@@ -135,24 +160,24 @@ impl Input for f64 {
     }
 }
 
-impl Input for bool {
-    fn input() -> Option<Value> {
+impl SimpleInput for bool {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "boolean",
         }))
     }
 }
 
-impl Input for String {
-    fn input() -> Option<Value> {
+impl SimpleInput for String {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "string",
         }))
     }
 }
 
-impl Input for Value {
-    fn input() -> Option<Value> {
+impl SimpleInput for serde_json::Value {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "object",
         }))
@@ -160,21 +185,42 @@ impl Input for Value {
 }
 
 impl<T: Input> Input for Vec<T> {
-    fn input() -> Option<Value> {
+    fn input() -> Option<serde_json::Value> {
         Some(json!({
             "type": "array",
             "items": T::input()
         }))
     }
-}
 
-impl<T: Input> Input for Option<T> {
-    fn input() -> Option<Value> {
-        T::input()
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+        if let serde_json::Value::Array(v) = value {
+            let mut w = Vec::new();
+            for e in v {
+                w.push(T::deserialize(e)?);
+            }
+            Ok(w)
+        } else {
+            Err(ApiError::Serialization(serde_json::Error::custom(
+                "Expected Array",
+            )))
+        }
     }
 }
 
-#[derive(Debug)]
+impl<T: Input> Input for Option<T> {
+    fn input() -> Option<serde_json::Value> {
+        T::input()
+    }
+
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+        Ok(match value {
+            serde_json::Value::Null => None,
+            _ => Some(T::deserialize(value)?),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum AtType {
     FadeAction,
     LockAction,
@@ -189,8 +235,19 @@ impl ToString for AtType {
 }
 
 impl<T: Input> ActionDescription<T> {
+    pub fn default() -> Self {
+        Self {
+            at_type: None,
+            description: None,
+            links: None,
+            title: None,
+            input: T::input(),
+            _input: PhantomData,
+        }
+    }
+
     pub fn at_type(mut self, at_type: AtType) -> Self {
-        self.at_type = Some(at_type.to_string());
+        self.at_type = Some(at_type);
         self
     }
 
@@ -199,7 +256,7 @@ impl<T: Input> ActionDescription<T> {
         self
     }
 
-    pub fn input(mut self, input: Value) -> Self {
+    pub fn input(mut self, input: serde_json::Value) -> Self {
         self.input = Some(input);
         self
     }
@@ -222,14 +279,14 @@ impl<T: Input> ActionDescription<T> {
         self
     }
 
-    pub fn default() -> Self {
-        Self {
-            at_type: None,
-            description: None,
-            links: None,
-            title: None,
-            input: T::input(),
-            _input: PhantomData,
+    #[doc(hidden)]
+    pub fn into_full_description(self) -> FullActionDescription {
+        FullActionDescription {
+            at_type: self.at_type.map(|t| t.to_string()),
+            description: self.description,
+            input: self.input,
+            links: self.links,
+            title: self.title,
         }
     }
 }

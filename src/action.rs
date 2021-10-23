@@ -4,18 +4,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    action_description::{ActionDescription, Input},
-    api_error::ApiError,
-    client::Client,
-    device::DeviceBase,
-};
+pub use crate::action_description::*;
+use crate::{api_error::ApiError, client::Client, device::Device};
+use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use jsonschema::JSONSchema;
-use serde_json::Value;
 use std::{
-    any::Any,
     sync::{Arc, Weak},
     time::SystemTime,
 };
@@ -25,23 +20,24 @@ use webthings_gateway_ipc_types::{
 };
 
 #[async_trait]
-pub trait Action: Send + Sized + 'static {
+pub trait Action: Send + Sync + 'static {
     type Input: Input;
+
     fn name(&self) -> String;
+
     fn description(&self) -> ActionDescription<Self::Input>;
-    fn full_description(&self) -> FullActionDescription {
-        FullActionDescription {
-            at_type: self.description().at_type,
-            description: self.description().description,
-            input: self.description().input,
-            links: self.description().links,
-            title: self.description().title,
-        }
-    }
+
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String>;
+
+    #[doc(hidden)]
+    fn full_description(&self) -> FullActionDescription {
+        self.description().into_full_description()
+    }
+
+    #[doc(hidden)]
     async fn check_and_perform(
         &mut self,
-        action_handle: ActionHandle<Value>,
+        action_handle: ActionHandle<serde_json::Value>,
     ) -> Result<(), String> {
         if let Some(ref input_schema) = self.description().input {
             let schema = JSONSchema::compile(input_schema).map_err(|err| {
@@ -74,47 +70,41 @@ pub trait Action: Send + Sized + 'static {
         ))
         .await
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
 }
 
 #[async_trait]
-pub trait ActionBase: Send {
+pub trait ActionBase: Send + Sync + AsAny + 'static {
     fn name(&self) -> String;
+
+    #[doc(hidden)]
     fn full_description(&self) -> FullActionDescription;
-    async fn check_and_perform(&mut self, action_handle: ActionHandle<Value>)
-        -> Result<(), String>;
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    #[doc(hidden)]
+    async fn check_and_perform(
+        &mut self,
+        action_handle: ActionHandle<serde_json::Value>,
+    ) -> Result<(), String>;
 }
+
+impl Downcast for dyn ActionBase {}
 
 #[async_trait]
 impl<T: Action> ActionBase for T {
     fn name(&self) -> String {
-        T::name(self)
+        <T as Action>::name(self)
     }
     fn full_description(&self) -> FullActionDescription {
-        T::full_description(self)
+        <T as Action>::full_description(self)
     }
     async fn check_and_perform(
         &mut self,
-        action_handle: ActionHandle<Value>,
+        action_handle: ActionHandle<serde_json::Value>,
     ) -> Result<(), String> {
-        T::check_and_perform(self, action_handle).await
-    }
-    fn as_any(&self) -> &dyn Any {
-        T::as_any(self)
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        T::as_any_mut(self)
+        <T as Action>::check_and_perform(self, action_handle).await
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Status {
     Created,
     Pending,
@@ -135,31 +125,31 @@ impl ToString for Status {
 #[derive(Clone)]
 pub struct ActionHandle<T: Input> {
     client: Arc<Mutex<dyn Client>>,
-    pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
+    pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub device_id: String,
     pub name: String,
     pub id: String,
     pub input: T,
-    pub input_: Value,
+    input_: serde_json::Value,
     pub status: Status,
     pub time_requested: DateTime<Utc>,
     pub time_completed: Option<DateTime<Utc>>,
 }
 
-impl<I: Input> ActionHandle<I> {
+impl<T: Input> ActionHandle<T> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
-        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
         name: String,
         id: String,
-        input: I,
-        input_: Value,
+        input: T,
+        input_: serde_json::Value,
     ) -> Self {
         ActionHandle {
             client,
@@ -190,7 +180,7 @@ impl<I: Input> ActionHandle<I> {
         Ok(())
     }
 
-    pub async fn status_notify(&self) -> Result<(), ApiError> {
+    async fn status_notify(&self) -> Result<(), ApiError> {
         let message = DeviceActionStatusNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),

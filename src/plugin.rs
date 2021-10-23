@@ -4,12 +4,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 use crate::{
-    adapter::{Adapter, AdapterBase, AdapterHandle},
+    adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
     client::{Client, WebsocketClient},
     database::Database,
 };
 use futures::{prelude::*, stream::SplitStream};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, path::PathBuf, process, str::FromStr, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::Mutex, time::sleep};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
@@ -73,7 +74,7 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
 }
 
 #[cfg(test)]
-pub fn connect(plugin_id: &str) -> (Plugin, Arc<Mutex<crate::client::MockClient>>) {
+pub fn connect<S: Into<String>>(plugin_id: S) -> (Plugin, Arc<Mutex<crate::client::MockClient>>) {
     let preferences = Preferences {
         language: "en-US".to_owned(),
         units: webthings_gateway_ipc_types::Units {
@@ -92,7 +93,7 @@ pub fn connect(plugin_id: &str) -> (Plugin, Arc<Mutex<crate::client::MockClient>
     let client = Arc::new(Mutex::new(crate::client::MockClient::new()));
     (
         Plugin {
-            plugin_id: plugin_id.to_owned(),
+            plugin_id: plugin_id.into(),
             preferences,
             user_profile,
             client: client.clone(),
@@ -126,7 +127,7 @@ pub struct Plugin {
     client: Arc<Mutex<dyn Client>>,
     #[cfg(not(test))]
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    adapters: HashMap<String, Arc<Mutex<Box<dyn AdapterBase>>>>,
+    adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
 }
 
 #[doc(hidden)]
@@ -196,7 +197,7 @@ impl Plugin {
                         .lock()
                         .await
                         .property_handle_mut()
-                        .set_value(message.property_value.clone())
+                        .set_value(Some(message.property_value.clone()))
                         .map_err(|err| {
                             format!(
                                 "Failed to update property {} of {}: {}",
@@ -379,26 +380,27 @@ impl Plugin {
     pub fn borrow_adapter(
         &mut self,
         adapter_id: &str,
-    ) -> Result<&mut Arc<Mutex<Box<dyn AdapterBase>>>, String> {
+    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, String> {
         self.adapters
             .get_mut(adapter_id)
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
     }
 
-    pub async fn create_adapter<T, F>(
+    pub async fn create_adapter<T, F, S>(
         &mut self,
-        adapter_id: &str,
-        name: &str,
+        adapter_id: S,
+        name: S,
         constructor: F,
-    ) -> Result<Arc<Mutex<Box<dyn AdapterBase>>>, ApiError>
+    ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, ApiError>
     where
-        T: Adapter + 'static,
+        T: Adapter,
         F: FnOnce(AdapterHandle) -> T,
+        S: Into<String> + Clone,
     {
         let message: Message = AdapterAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
-            adapter_id: adapter_id.to_owned(),
-            name: name.to_owned(),
+            adapter_id: adapter_id.clone().into(),
+            name: name.into(),
             package_name: self.plugin_id.clone(),
         }
         .into();
@@ -408,14 +410,14 @@ impl Plugin {
         let adapter_handle = AdapterHandle::new(
             self.client.clone(),
             self.plugin_id.clone(),
-            adapter_id.to_owned(),
+            adapter_id.clone().into(),
         );
 
-        let adapter: Arc<Mutex<Box<dyn AdapterBase>>> =
+        let adapter: Arc<Mutex<Box<dyn Adapter>>> =
             Arc::new(Mutex::new(Box::new(constructor(adapter_handle))));
         let adapter_weak = Arc::downgrade(&adapter);
         adapter.lock().await.adapter_handle_mut().weak = adapter_weak;
-        self.adapters.insert(adapter_id.to_owned(), adapter.clone());
+        self.adapters.insert(adapter_id.into(), adapter.clone());
 
         Ok(adapter)
     }
@@ -445,7 +447,7 @@ impl Plugin {
         process::exit(DONT_RESTART_EXIT_CODE);
     }
 
-    pub fn get_config_database(&self) -> Database {
+    pub fn get_config_database<T: Serialize + DeserializeOwned>(&self) -> Database<T> {
         let config_path = PathBuf::from(self.user_profile.config_dir.clone());
         Database::new(config_path, self.plugin_id.clone())
     }
