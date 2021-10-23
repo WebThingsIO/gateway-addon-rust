@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for everything related to WoT actions.
+
 pub use crate::action_description::*;
 use crate::{api_error::ApiError, client::Client, device::Device};
 use as_any::{AsAny, Downcast};
@@ -19,14 +21,53 @@ use webthings_gateway_ipc_types::{
     Action as FullActionDescription, DeviceActionStatusNotificationMessageData,
 };
 
+/// A trait used to specify the structure and behaviour of a WoT action.
+///
+/// Defines how to react on gateway requests.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, action::NoInput};
+/// # use async_trait::async_trait;
+/// struct ExampleAction();
+///
+/// #[async_trait]
+/// impl Action for ExampleAction {
+///     type Input = NoInput;
+///
+///     fn name(&self) -> String {
+///         "example-action".to_owned()
+///     }
+///     fn description(&self) -> ActionDescription<Self::Input> {
+///         ActionDescription::default()
+///     }
+///     async fn perform(
+///         &mut self,
+///         mut action_handle: ActionHandle<Self::Input>,
+///     ) -> Result<(), String> {
+///         action_handle.start();
+///         log::debug!("Performing example-action");
+///         action_handle.finish();
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait Action: Send + Sync + 'static {
+    /// Type of [input][Input] this action expects.
     type Input: Input;
 
+    /// Name of the action.
     fn name(&self) -> String;
 
+    /// [WoT description][ActionDescription] of the action.
     fn description(&self) -> ActionDescription<Self::Input>;
 
+    /// Called when this action has been started through the gateway.
+    ///
+    /// If action execution may take a while, don't block this function.
+    ///
+    /// Don't forget to call `action_handle.start()` and `action_handle.stop()`.
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String>;
 
     #[doc(hidden)]
@@ -72,8 +113,16 @@ pub trait Action: Send + Sync + 'static {
     }
 }
 
+/// An object safe variant of [Action].
+///
+/// Auto-implemented for all objects which implement the [Action] trait.  **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [Action] implementation.
+///
+/// This can (in contrast to the [Action] trait) be used to store objects for dynamic dispatch.
 #[async_trait]
 pub trait ActionBase: Send + Sync + AsAny + 'static {
+    /// Name of the action.
     fn name(&self) -> String;
 
     #[doc(hidden)]
@@ -104,6 +153,7 @@ impl<T: Action> ActionBase for T {
     }
 }
 
+/// Possible states of an [action][ActionHandle].
 #[derive(Debug, Clone)]
 pub enum Status {
     Created,
@@ -122,9 +172,13 @@ impl ToString for Status {
     }
 }
 
+/// A struct which represents an instance of a WoT action.
+///
+/// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct ActionHandle<T: Input> {
     client: Arc<Mutex<dyn Client>>,
+    /// Reference to the [device][crate::device::Device] which owns this action.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
@@ -167,12 +221,14 @@ impl<T: Input> ActionHandle<T> {
         }
     }
 
+    /// Notify the gateway that execution of this action instance has started.
     pub async fn start(&mut self) -> Result<(), ApiError> {
         self.status = Status::Pending;
         self.status_notify().await?;
         Ok(())
     }
 
+    /// Notify the gateway that execution of this action instance has finished.
     pub async fn finish(&mut self) -> Result<(), ApiError> {
         self.status = Status::Completed;
         self.time_completed = Some(SystemTime::now().into());
@@ -202,8 +258,17 @@ impl<T: Input> ActionHandle<T> {
     }
 }
 
+/// Convenience type for a collection of [ActionBase].
 pub type Actions = Vec<Box<dyn ActionBase>>;
 
+/// Convenience macro for building an [Actions].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, example::ExampleAction};
+/// actions![ExampleAction::new()]
+/// # ;
+/// ```
 #[macro_export]
 macro_rules! actions [
     ($($e:expr),*) => ({

@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for everything related to WoT properties.
+
 pub use crate::property_description::*;
 use crate::{api_error::ApiError, client::Client, device::Device};
 use as_any::{AsAny, Downcast};
@@ -17,19 +19,60 @@ use webthings_gateway_ipc_types::{
     DevicePropertyChangedNotificationMessageData, Message, Property as FullPropertyDescription,
 };
 
+/// A trait used to specify the behaviour of a WoT property.
+///
+/// Wraps a [property handle][PropertyHandle] and defines how to react on gateway requests. Built by a [PropertyBuilder].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*};
+/// # use async_trait::async_trait;
+/// struct ExampleProperty(PropertyHandle<i32>);
+///
+/// #[async_trait]
+/// impl Property for ExampleProperty {
+///     type Value = i32;
+///
+///     fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value> {
+///         &mut self.0
+///     }
+///
+///     async fn on_update(&mut self, value: Self::Value) -> Result<(), String> {
+///         log::debug!(
+///             "Value changed from {:?} to {:?}",
+///             self.0.description.value,
+///             value,
+///         );
+///         Ok(())
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait Property: Send + Sync + 'static {
+    /// Type of [value][Value] this property accepts.
     type Value: Value;
 
+    /// Return the wrapped [property handle][PropertyHandle].
     fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value>;
 
+    /// Called when the [value][Value] has been updated through the gateway.
+    ///
+    /// Should return `Ok(())` when the given value is accepted and an `Err` otherwise.
     async fn on_update(&mut self, _value: Self::Value) -> Result<(), String> {
         Ok(())
     }
 }
 
+/// An object safe variant of [Property].
+///
+/// Auto-implemented for all objects which implement the [Property] trait. **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [Property] implementation.
+///
+/// This can (in contrast to the [Property] trait) be used to store objects for dynamic dispatch.
 #[async_trait]
 pub trait PropertyBase: Send + Sync + AsAny + 'static {
+    /// Return the wrapped [property handle][PropertyHandle].
     fn property_handle_mut(&mut self) -> &mut dyn PropertyHandleBase;
 
     #[doc(hidden)]
@@ -50,9 +93,13 @@ impl<T: Property> PropertyBase for T {
     }
 }
 
+/// A struct which represents an instance of a WoT property.
+///
+/// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct PropertyHandle<T: Value> {
     client: Arc<Mutex<dyn Client>>,
+    /// Reference to the [device][crate::device::Device] which owns this property.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
@@ -84,6 +131,7 @@ impl<T: Value> PropertyHandle<T> {
         }
     }
 
+    /// Sets the [value][Value] and notifies the gateway.
     pub async fn set_value(&mut self, value: T) -> Result<(), ApiError> {
         self.description.value = value;
 
@@ -102,8 +150,16 @@ impl<T: Value> PropertyHandle<T> {
     }
 }
 
+/// A non-generic variant of [PropertyHandle].
+///
+/// Auto-implemented for every [PropertyHandle]. **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [PropertyHandle] implementation.
 #[async_trait]
 pub trait PropertyHandleBase: Send + Sync + AsAny + 'static {
+    /// Sets the [value][Value] and notifies the gateway.
+    ///
+    /// Make sure that the type of the provided value is compatible.
     async fn set_value(&mut self, value: Option<serde_json::Value>) -> Result<(), ApiError>;
 }
 
@@ -117,15 +173,47 @@ impl<T: Value> PropertyHandleBase for PropertyHandle<T> {
     }
 }
 
+/// A trait used to specify the structure of a WoT property.
+///
+/// Builds a [Property] instance.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, example::ExampleProperty};
+/// // ...
+/// struct ExamplePropertyBuilder();
+///
+/// impl PropertyBuilder for ExamplePropertyBuilder {
+///     type Property = ExampleProperty;
+///     type Value = i32;
+///
+///     fn name(&self) -> String {
+///         "example-property".to_owned()
+///     }
+///
+///     fn description(&self) -> PropertyDescription<i32> {
+///         PropertyDescription::default()
+///     }
+///
+///     fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
+///         ExampleProperty::new(property_handle)
+///     }
+/// }
+/// ```
 pub trait PropertyBuilder: Send + Sync + 'static {
+    /// Type of [property][Property] this builds.
     type Property: Property<Value = Self::Value>;
 
+    /// Type of [value][Value] which `Self::Property` accepts.
     type Value: Value;
 
+    /// Name of the property.
     fn name(&self) -> String;
 
+    /// [WoT description][PropertyDescription] of the property.
     fn description(&self) -> PropertyDescription<Self::Value>;
 
+    /// Build a new instance of this property using the given [property handle][PropertyHandle].
     fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property;
 
     #[doc(hidden)]
@@ -156,7 +244,15 @@ pub trait PropertyBuilder: Send + Sync + 'static {
     }
 }
 
+/// An object safe variant of [PropertyBuilder].
+///
+/// Auto-implemented for all objects which implement the [PropertyBuilder] trait.  **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [PropertyBuilder] implementation.
+///
+/// This can (in contrast to the [PropertyBuilder] trait) be used to store objects for dynamic dispatch.
 pub trait PropertyBuilderBase: Send + Sync + 'static {
+    /// Name of the property.
     fn name(&self) -> String;
 
     #[doc(hidden)]
@@ -195,8 +291,17 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
     }
 }
 
+/// Convenience type for a collection of [PropertyBuilderBase].
 pub type Properties = Vec<Box<dyn PropertyBuilderBase>>;
 
+/// Convenience macro for building a [Properties].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, example::ExamplePropertyBuilder};
+/// properties![ExamplePropertyBuilder::new()]
+/// # ;
+/// ```
 #[macro_export]
 macro_rules! properties [
     ($($e:expr),*) => ({

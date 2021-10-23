@@ -4,11 +4,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for working with WoT datatypes.
+
 use crate::{
     action_description::Input, event_description::Data, property_description::Value, ApiError,
 };
 use serde_json::json;
 
+/// An enum of all WoT datatypes.
 #[derive(Debug, Clone)]
 pub enum Type {
     Null,
@@ -35,6 +38,7 @@ impl ToString for Type {
     }
 }
 
+/// An equivalent of the WoT [type][Type] null.
 #[derive(Clone, Default)]
 pub struct Null;
 

@@ -3,6 +3,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
+
+//! A module for everything related to WebthingsIO adapters.
+
 use crate::{
     api_error::ApiError,
     client::Client,
@@ -21,10 +24,67 @@ use webthings_gateway_ipc_types::{
     DeviceAddedNotificationMessageData, DeviceWithoutId, Message,
 };
 
+/// A trait used to specify the behaviour of a WebthingsIO adapter.
+///
+/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::plugin::Plugin].
+///
+/// # Examples
+/// ```no_run
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use webthings_gateway_ipc_types::DeviceWithoutId;
+/// # use async_trait::async_trait;
+/// struct ExampleAdapter(AdapterHandle);
+///
+/// #[async_trait]
+/// impl Adapter for ExampleAdapter {
+///     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
+///         &mut self.0
+///     }
+///
+///     async fn on_remove_device(&mut self, device_id: String) -> Result<(), String> {
+///         log::debug!("Device {} removed", device_id);
+///         Ok(())
+///     }
+/// }
+///
+/// impl ExampleAdapter {
+/// #   pub fn new(adapter_handle: AdapterHandle) -> Self {
+/// #       Self(adapter_handle)
+/// #   }
+///     pub async fn init(&mut self) -> Result<(), ApiError> {
+///         self.adapter_handle_mut()
+///             .add_device(ExampleDeviceBuilder::new())
+///             .await?;
+///         Ok(())
+///     }
+/// }
+///
+/// # #[tokio::main]
+/// pub async fn main() -> Result<(), ApiError> {
+///     let mut plugin = connect("example-addon").await?;
+///     let adapter = plugin
+///         .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new)
+///         .await?;
+///     adapter
+///         .lock()
+///         .await
+///         .as_any_mut()
+///         .downcast_mut::<ExampleAdapter>()
+///         .unwrap()
+///         .init()
+///         .await?;
+///     plugin.event_loop().await;
+///     Ok(())
+/// }
+/// ```
 #[async_trait]
 pub trait Adapter: Send + Sync + AsAny + 'static {
+    /// Return the wrapped [adapter handle][AdapterHandle].
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
+    /// Called when a new [device][crate::device::Device] was saved within the gateway.
+    ///
+    /// This happens when a thing was added through the add things view.
     async fn on_device_saved(
         &mut self,
         _device_id: String,
@@ -33,14 +93,23 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
         Ok(())
     }
 
+    /// Called when the gateway starts pairing.
+    ///
+    /// This happens when the add things view opens.
     async fn on_start_pairing(&mut self, _timeout: Duration) -> Result<(), String> {
         Ok(())
     }
 
+    /// Called when the gateway stops pairing.
+    ///
+    /// This happens when the add things view closes.
     async fn on_cancel_pairing(&mut self) -> Result<(), String> {
         Ok(())
     }
 
+    /// Called when a previously saved [device][crate::device::Device] was removed.
+    ///
+    /// This happens when an added thing was removed through the gateway.
     async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
         Ok(())
     }
@@ -48,6 +117,9 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
 
 impl Downcast for dyn Adapter {}
 
+/// A struct which represents an instance of a WebthingsIO adapter.
+///
+/// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct AdapterHandle {
     client: Arc<Mutex<dyn Client>>,
@@ -72,6 +144,7 @@ impl AdapterHandle {
         }
     }
 
+    /// Build and add a new device using the given [device builder][crate::device::DeviceBuilder].
     pub async fn add_device<D, B>(
         &mut self,
         device_builder: B,
@@ -133,14 +206,17 @@ impl AdapterHandle {
         Ok(device)
     }
 
+    /// Get a reference to all the [devices][crate::device::Device] which this adapter owns.
     pub fn devices(&self) -> &HashMap<String, Arc<Mutex<Box<dyn Device>>>> {
         &self.devices
     }
 
+    /// Get a [device][crate::device::Device] which this adapter owns by ID.
     pub fn get_device(&self, id: &str) -> Option<Arc<Mutex<Box<dyn Device>>>> {
         self.devices.get(id).cloned()
     }
 
+    /// Unload this adapter.
     pub async fn unload(&self) -> Result<(), ApiError> {
         let message: Message = AdapterUnloadResponseMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -151,6 +227,7 @@ impl AdapterHandle {
         self.client.lock().await.send_message(&message).await
     }
 
+    /// Remove a [device][crate::device::Device] which this adapter owns by ID.
     pub async fn remove_device<S: Into<String> + Clone>(
         &mut self,
         device_id: S,

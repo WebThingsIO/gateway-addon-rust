@@ -9,6 +9,22 @@ use serde::{ser::Error, Serialize};
 use std::marker::PhantomData;
 use webthings_gateway_ipc_types::{Event as FullEventDescription, Link};
 
+/// A struct which represents a WoT [event description][webthings_gateway_ipc_types::Event].
+///
+/// This is used by [Event][crate::event::Event].
+///
+/// Use the provided builder methods instead of directly writing to the struct fields.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, event::{AtType, NoData}};
+/// # let _ =
+/// EventDescription::<NoData>::default()
+///     .at_type(AtType::OverheatedEvent)
+///     .title("Foo overheated event")
+///     .description("Your foo is hot")
+/// # ;
+/// ```
 #[derive(Clone)]
 pub struct EventDescription<T: Data> {
     pub at_type: Option<AtType>,
@@ -24,27 +40,71 @@ pub struct EventDescription<T: Data> {
     _data: PhantomData<T>,
 }
 
+/// A trait which converts Rust types to WoT [types][crate::type_::Type].
+///
+/// Already implemented for common Rust types. You may want to implement [SimpleData] instead of this.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, type_::Type, event::{AtType, Data}};
+/// # use serde_json::json;
+/// # use serde::{de::Error, Deserialize};
+/// #[derive(Clone)]
+/// struct OverheatedData(i32);
+///
+/// impl Data for OverheatedData {
+///     fn type_() -> Option<Type> {
+///         Some(Type::Number)
+///     }
+///     fn description(description: EventDescription<Self>) -> EventDescription<Self> {
+///         description.at_type(AtType::OverheatedEvent)
+///     }
+///     fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+///         Ok(Some(
+///             serde_json::to_value(value.0).map_err(ApiError::Serialization)?,
+///         ))
+///     }
+/// }
+/// ```
 pub trait Data: Clone + Send + Sync + 'static {
+    /// WoT [type][crate::type_::Type] to be used.
     fn type_() -> Option<Type> {
         Some(Type::Object)
     }
 
+    /// Deviations from the default [event description][EventDescription].
     fn description(description: EventDescription<Self>) -> EventDescription<Self> {
         description
     }
 
+    /// Serialize the value.
     fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError>;
 }
 
+/// A simplification of [Data] which requires [Serialize] to auto-implement [Data].
+///
+/// # Examples
+/// ```
+/// # use serde::Serialize;
+/// # use gateway_addon_rust::event::SimpleData;
+/// #[derive(Serialize, Clone)]
+/// struct Foo {
+///     bar: i32,
+/// }
+/// impl SimpleData for Foo {}
+/// ```
 pub trait SimpleData: Serialize + Clone + Send + Sync + 'static {
+    /// WoT [type][crate::type_::Type] to be used.
     fn type_() -> Option<Type> {
         Some(Type::Object)
     }
 
+    /// Deviations from the default [event description][EventDescription].
     fn description(description: EventDescription<Self>) -> EventDescription<Self> {
         description
     }
 
+    /// Serialize the value.
     fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
         Ok(Some(
             serde_json::to_value(value).map_err(ApiError::Serialization)?,
@@ -66,6 +126,7 @@ impl<T: SimpleData> Data for T {
     }
 }
 
+/// A struct which can be used as [data][Data] for events which do not expect any data.
 #[derive(Clone, Serialize)]
 pub struct NoData;
 
@@ -217,6 +278,7 @@ impl<T: Data> Data for Option<T> {
     }
 }
 
+/// Possible values of `@type` for an [event][EventDescription].
 #[derive(Debug, Clone)]
 pub enum AtType {
     AlarmEvent,
@@ -232,7 +294,9 @@ impl ToString for AtType {
     }
 }
 
+/// # Builder methods
 impl<T: Data> EventDescription<T> {
+    /// Build an empty [EventDescription].
     pub fn default() -> Self {
         let description = Self {
             at_type: None,
@@ -250,26 +314,50 @@ impl<T: Data> EventDescription<T> {
         T::description(description)
     }
 
+    /// Set `@type`.
     pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type);
         self
     }
 
+    /// Set `description`.
     pub fn description<S: Into<String>>(mut self, description: S) -> Self {
         self.description = Some(description.into());
         self
     }
 
+    /// Set `enum`.
     pub fn enum_(mut self, enum_: Vec<T>) -> Self {
         self.enum_ = Some(enum_);
         self
     }
 
+    /// Set `links`.
     pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
     }
 
+    /// Add a single link to `links`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use gateway_addon_rust::event::EventDescription;
+    /// # use webthings_gateway_ipc_types::Link;
+    /// # let _: EventDescription<i32> =
+    /// EventDescription::default()
+    ///     .link(Link {
+    ///         href: "https://www.rust-lang.org/".to_owned(),
+    ///         media_type: None,
+    ///         rel: None,
+    ///     })
+    ///     .link(Link {
+    ///         href: "https://www.reddit.com/".to_owned(),
+    ///         media_type: None,
+    ///         rel: None,
+    ///     })
+    /// # ;
+    /// ```
     pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
@@ -278,31 +366,44 @@ impl<T: Data> EventDescription<T> {
         self
     }
 
+    /// Set `maximum`.
     pub fn maximum<F: Into<f64>>(mut self, maximum: F) -> Self {
         self.maximum = Some(maximum.into());
         self
     }
 
+    /// Set `minimum`.
     pub fn minimum<F: Into<f64>>(mut self, minimum: F) -> Self {
         self.minimum = Some(minimum.into());
         self
     }
 
+    /// Set `multipleOf`.
     pub fn multiple_of<F: Into<f64>>(mut self, multiple_of: F) -> Self {
         self.multiple_of = Some(multiple_of.into());
         self
     }
 
+    /// Set `title`.
     pub fn title<S: Into<String>>(mut self, title: S) -> Self {
         self.title = Some(title.into());
         self
     }
 
+    /// Manually overwrite `type`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use gateway_addon_rust::{type_::Type, event::EventDescription};
+    /// EventDescription::<serde_json::Value>::default().type_(Type::Number)
+    /// # ;
+    /// ```
     pub fn type_(mut self, type_: Type) -> Self {
         self.type_ = Some(type_);
         self
     }
 
+    /// Set `unit`.
     pub fn unit<S: Into<String>>(mut self, unit: S) -> Self {
         self.unit = Some(unit.into());
         self
