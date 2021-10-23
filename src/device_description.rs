@@ -139,7 +139,7 @@ impl DeviceDescription {
             at_type: self
                 .at_type
                 .map(|v| v.into_iter().map(|t| t.to_string()).collect()),
-            id: id,
+            id,
             title: self.title,
             description: self.description,
             properties: Some(property_descriptions),
