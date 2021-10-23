@@ -305,8 +305,7 @@ pub type Properties = Vec<Box<dyn PropertyBuilderBase>>;
 #[macro_export]
 macro_rules! properties [
     ($($e:expr),*) => ({
-        let mut _temp = $crate::property::Properties::new();
-        $(_temp.push(Box::new($e));)*
+        let _temp: Properties = vec![$(Box::new($e)),*];
         _temp
     })
 ];

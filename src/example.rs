@@ -88,6 +88,7 @@ impl DeviceBuilder for ExampleDeviceBuilder {
 }
 
 impl ExampleDeviceBuilder {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self()
     }
@@ -127,6 +128,7 @@ impl PropertyBuilder for ExamplePropertyBuilder {
 }
 
 impl ExamplePropertyBuilder {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self()
     }
@@ -166,6 +168,7 @@ impl Action for ExampleAction {
 }
 
 impl ExampleAction {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self()
     }
@@ -186,6 +189,7 @@ impl Event for ExampleEvent {
 }
 
 impl ExampleEvent {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self()
     }

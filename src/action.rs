@@ -272,8 +272,7 @@ pub type Actions = Vec<Box<dyn ActionBase>>;
 #[macro_export]
 macro_rules! actions [
     ($($e:expr),*) => ({
-        let mut _temp = $crate::action::Actions::new();
-        $(_temp.push(Box::new($e));)*
+        let _temp: Actions = vec![$(Box::new($e)),*];
         _temp
     })
 ];

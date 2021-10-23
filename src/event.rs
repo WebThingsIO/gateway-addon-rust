@@ -242,8 +242,7 @@ pub type Events = Vec<Box<dyn EventBase>>;
 #[macro_export]
 macro_rules! events [
     ($($e:expr),*) => ({
-        let mut _temp = $crate::event::Events::new();
-        $(_temp.push(Box::new($e));)*
+        let _temp: Events = vec![$(Box::new($e)),*];
         _temp
     })
 ];
