@@ -4,17 +4,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    api_error::ApiError,
-    client::Client,
-    device::DeviceBase,
-    event_description::{Data, EventDescription},
-};
+pub use crate::event_description::*;
+use crate::{api_error::ApiError, client::Client, device::Device};
+use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde_json::Value;
 use std::{
-    any::Any,
     marker::PhantomData,
     sync::{Arc, Weak},
     time::SystemTime,
@@ -24,51 +19,55 @@ use webthings_gateway_ipc_types::{
     DeviceEventNotificationMessageData, Event as FullEventDescription, Message,
 };
 
-pub trait Event {
-    type Data: Data + 'static;
+pub trait Event: Send + Sync + 'static {
+    type Data: Data;
+
     fn name(&self) -> String;
+
     fn description(&self) -> EventDescription<Self::Data>;
-    fn full_description(&self) -> FullEventDescription {
-        FullEventDescription {
-            at_type: self.description().at_type,
-            description: self.description().description,
-            enum_: self.description().enum_,
-            links: self.description().links,
-            maximum: self.description().maximum,
-            minimum: self.description().minimum,
-            multiple_of: self.description().multiple_of,
-            name: Some(self.name()),
-            title: self.description().title,
-            type_: self.description().type_,
-            unit: self.description().unit,
-        }
-    }
+
     fn init(&self, _event_handle: EventHandle<Self::Data>) {}
+
+    #[doc(hidden)]
+    fn full_description(&self) -> Result<FullEventDescription, ApiError> {
+        self.description().into_full_description(self.name())
+    }
+
     #[doc(hidden)]
     fn build_event_handle(
         &self,
         client: Arc<Mutex<dyn Client>>,
-        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
         name: String,
     ) -> EventHandle<Self::Data> {
-        let event_handle =
-            EventHandle::<Self::Data>::new(client, device, plugin_id, adapter_id, device_id, name);
+        let event_handle = EventHandle::new(
+            client,
+            device,
+            plugin_id,
+            adapter_id,
+            device_id,
+            name,
+            self.description(),
+        );
         self.init(event_handle.clone());
         event_handle
     }
 }
 
-pub trait EventBase {
+pub trait EventBase: Send + Sync + AsAny + 'static {
     fn name(&self) -> String;
-    fn full_description(&self) -> FullEventDescription;
+
+    #[doc(hidden)]
+    fn full_description(&self) -> Result<FullEventDescription, ApiError>;
+
     #[doc(hidden)]
     fn build_event_handle(
         &self,
         client: Arc<Mutex<dyn Client>>,
-        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
@@ -76,49 +75,53 @@ pub trait EventBase {
     ) -> Box<dyn EventHandleBase>;
 }
 
+impl Downcast for dyn EventBase {}
+
 impl<T: Event> EventBase for T {
     fn name(&self) -> String {
-        T::name(self)
+        <T as Event>::name(self)
     }
 
-    fn full_description(&self) -> FullEventDescription {
-        T::full_description(self)
+    fn full_description(&self) -> Result<FullEventDescription, ApiError> {
+        <T as Event>::full_description(self)
     }
 
     fn build_event_handle(
         &self,
         client: Arc<Mutex<dyn Client>>,
-        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
         name: String,
     ) -> Box<dyn EventHandleBase> {
-        Box::new(T::build_event_handle(
+        Box::new(<T as Event>::build_event_handle(
             self, client, device, plugin_id, adapter_id, device_id, name,
         ))
     }
 }
 
 #[derive(Clone)]
-pub struct EventHandle<D: Data> {
+pub struct EventHandle<T: Data> {
     client: Arc<Mutex<dyn Client>>,
-    pub device: Weak<Mutex<Box<dyn DeviceBase>>>,
+    pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
     pub device_id: String,
     pub name: String,
-    _data: PhantomData<D>,
+    pub description: EventDescription<T>,
+    _data: PhantomData<T>,
 }
 
-impl<D: Data + 'static> EventHandle<D> {
+impl<T: Data> EventHandle<T> {
     pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
-        device: Weak<Mutex<Box<dyn DeviceBase>>>,
+        device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
         device_id: String,
         name: String,
+        description: EventDescription<T>,
     ) -> Self {
         EventHandle {
             client,
@@ -127,29 +130,27 @@ impl<D: Data + 'static> EventHandle<D> {
             adapter_id,
             device_id,
             name,
+            description,
             _data: PhantomData,
         }
     }
 
-    pub async fn raise(&self, data: D) -> Result<(), ApiError> {
+    pub async fn raise(&self, data: T) -> Result<(), ApiError> {
         let data = Data::serialize(data)?;
         EventHandleBase::raise(self, data).await
     }
-
-    pub fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 #[async_trait]
-pub trait EventHandleBase: Send + Sync {
-    async fn raise(&self, data: Option<Value>) -> Result<(), ApiError>;
-    fn as_any(&self) -> &dyn Any;
+pub trait EventHandleBase: Send + Sync + AsAny + 'static {
+    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), ApiError>;
 }
 
+impl Downcast for dyn EventHandleBase {}
+
 #[async_trait]
-impl<D: Data + 'static> EventHandleBase for EventHandle<D> {
-    async fn raise(&self, data: Option<Value>) -> Result<(), ApiError> {
+impl<D: Data> EventHandleBase for EventHandle<D> {
+    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), ApiError> {
         let time: DateTime<Utc> = SystemTime::now().into();
         let message: Message = DeviceEventNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -166,10 +167,6 @@ impl<D: Data + 'static> EventHandleBase for EventHandle<D> {
         self.client.lock().await.send_message(&message).await?;
         Ok(())
     }
-
-    fn as_any(&self) -> &dyn Any {
-        EventHandle::<D>::as_any(self)
-    }
 }
 
 pub type Events = Vec<Box<dyn EventBase>>;
@@ -185,7 +182,7 @@ macro_rules! events [
 
 #[cfg(test)]
 mod tests {
-    use crate::{client::MockClient, event::EventHandle};
+    use crate::{client::MockClient, event::EventHandle, event_description::EventDescription};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -200,6 +197,8 @@ mod tests {
         let client = Arc::new(Mutex::new(MockClient::new()));
         let data = json!(42);
 
+        let event_description = EventDescription::default();
+
         let event = EventHandle::new(
             client.clone(),
             Weak::new(),
@@ -207,6 +206,7 @@ mod tests {
             adapter_id.clone(),
             device_id.clone(),
             event_name.clone(),
+            event_description,
         );
 
         let expected_data = Some(data.clone());

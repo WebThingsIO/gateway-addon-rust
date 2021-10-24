@@ -15,7 +15,7 @@ use mockall::automock;
 
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait Client: Send {
+pub trait Client: Send + Sync + 'static {
     async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), ApiError>;
 }
 

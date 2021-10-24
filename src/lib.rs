@@ -4,15 +4,34 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 pub mod action;
-pub mod action_description;
+mod action_description;
 pub mod adapter;
 pub mod api_error;
-pub mod client;
+pub(crate) mod client;
 pub mod database;
 pub mod device;
-pub mod device_description;
+mod device_description;
 pub mod event;
-pub mod event_description;
+mod event_description;
 pub mod plugin;
 pub mod property;
-pub mod property_description;
+mod property_description;
+pub mod type_;
+
+pub mod prelude {
+    pub use crate::{
+        action::{Action, ActionDescription, ActionHandle, Actions},
+        actions,
+        adapter::{Adapter, AdapterHandle},
+        api_error::ApiError,
+        database::Database,
+        device::{Device, DeviceBuilder, DeviceDescription, DeviceHandle},
+        event::{Event, EventDescription, EventHandle, Events},
+        events,
+        plugin::Plugin,
+        properties,
+        property::{Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle},
+    };
+}
+
+pub use prelude::*;

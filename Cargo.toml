@@ -17,6 +17,7 @@ webthings-gateway-ipc-types = "1.0.0-alpha.2"
 schemars = "0.8.6"
 jsonschema = "0.12.1"
 chrono = "0.4.19"
+as-any = "0.2.0"
 
 [dependencies.serde]
 version = "1.0"

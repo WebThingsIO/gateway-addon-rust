@@ -3,21 +3,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
+
+pub use crate::device_description::*;
 use crate::{
     action::{ActionBase, ActionHandle, Actions},
     actions,
-    adapter::AdapterBase,
+    adapter::Adapter,
     api_error::ApiError,
     client::Client,
-    device_description::DeviceDescription,
     event::{EventBase, EventHandleBase, Events},
     events, properties,
     property::{Properties, PropertyBase, PropertyBuilderBase},
 };
+use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
-use serde_json::Value;
 use std::{
-    any::Any,
     collections::{BTreeMap, HashMap},
     sync::{Arc, Weak},
 };
@@ -25,44 +25,21 @@ use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 #[async_trait]
-pub trait Device: Send + Sized + 'static {
+pub trait Device: Send + Sync + AsAny + 'static {
     fn device_handle_mut(&mut self) -> &mut DeviceHandle;
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
 }
 
-#[async_trait]
-pub trait DeviceBase: Send {
-    fn device_handle_mut(&mut self) -> &mut DeviceHandle;
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-#[async_trait]
-impl<T: Device> DeviceBase for T {
-    fn device_handle_mut(&mut self) -> &mut DeviceHandle {
-        T::device_handle_mut(self)
-    }
-    fn as_any(&self) -> &dyn Any {
-        T::as_any(self)
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        T::as_any_mut(self)
-    }
-}
+impl Downcast for dyn Device {}
 
 #[derive(Clone)]
 pub struct DeviceHandle {
     client: Arc<Mutex<dyn Client>>,
-    pub(crate) weak: Weak<Mutex<Box<dyn DeviceBase>>>,
-    pub adapter: Weak<Mutex<Box<dyn AdapterBase>>>,
+    pub(crate) weak: Weak<Mutex<Box<dyn Device>>>,
+    pub adapter: Weak<Mutex<Box<dyn Adapter>>>,
     pub plugin_id: String,
     pub adapter_id: String,
-    pub description: FullDeviceDescription,
+    pub device_id: String,
+    pub description: DeviceDescription,
     properties: HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>>,
     actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
     events: HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>>,
@@ -71,10 +48,11 @@ pub struct DeviceHandle {
 impl DeviceHandle {
     pub(crate) fn new(
         client: Arc<Mutex<dyn Client>>,
-        adapter: Weak<Mutex<Box<dyn AdapterBase>>>,
+        adapter: Weak<Mutex<Box<dyn Adapter>>>,
         plugin_id: String,
         adapter_id: String,
-        description: FullDeviceDescription,
+        device_id: String,
+        description: DeviceDescription,
     ) -> Self {
         DeviceHandle {
             client,
@@ -83,6 +61,7 @@ impl DeviceHandle {
             plugin_id,
             adapter_id,
             description,
+            device_id,
             properties: HashMap::new(),
             actions: HashMap::new(),
             events: HashMap::new(),
@@ -90,7 +69,6 @@ impl DeviceHandle {
     }
 
     pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilderBase>) {
-        let description = property_builder.full_description();
         let name = property_builder.name();
 
         let property = Arc::new(Mutex::new(property_builder.build(
@@ -98,9 +76,7 @@ impl DeviceHandle {
             self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-            self.description.id.clone(),
-            name.clone(),
-            description,
+            self.device_id.clone(),
         )));
 
         self.properties.insert(name, property);
@@ -114,10 +90,14 @@ impl DeviceHandle {
         self.properties.get(name).cloned()
     }
 
-    pub async fn set_property_value(&self, name: &str, data: Value) -> Result<(), ApiError> {
+    pub async fn set_property_value(
+        &self,
+        name: &str,
+        value: Option<serde_json::Value>,
+    ) -> Result<(), ApiError> {
         if let Some(property) = self.properties.get(name) {
             let mut property = property.lock().await;
-            property.property_handle_mut().set_value(data).await?;
+            property.property_handle_mut().set_value(value).await?;
             Ok(())
         } else {
             Err(ApiError::UnknownProperty)
@@ -144,12 +124,12 @@ impl DeviceHandle {
         &self,
         action_name: String,
         action_id: String,
-        input: Value,
+        input: serde_json::Value,
     ) -> Result<(), String> {
         let action = self.get_action(&action_name).ok_or_else(|| {
             format!(
                 "Failed to request action {} of {}: not found",
-                action_name, self.description.id,
+                action_name, self.device_id,
             )
         })?;
         let mut action = action.lock().await;
@@ -158,7 +138,7 @@ impl DeviceHandle {
             self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-            self.description.id.clone(),
+            self.device_id.clone(),
             action.name(),
             action_id,
             input.clone(),
@@ -175,7 +155,7 @@ impl DeviceHandle {
             self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-            self.description.id.clone(),
+            self.device_id.clone(),
             name.clone(),
         );
 
@@ -192,7 +172,11 @@ impl DeviceHandle {
         self.events.get(name).cloned()
     }
 
-    pub async fn raise_event(&self, name: &str, data: Option<Value>) -> Result<(), ApiError> {
+    pub async fn raise_event(
+        &self,
+        name: &str,
+        data: Option<serde_json::Value>,
+    ) -> Result<(), ApiError> {
         if let Some(event) = self.events.get(name) {
             let event = event.lock().await;
             event.raise(data).await?;
@@ -203,26 +187,35 @@ impl DeviceHandle {
     }
 }
 
-pub trait DeviceBuilder {
+pub trait DeviceBuilder: Send + Sync + 'static {
     type Device: Device;
+
     fn id(&self) -> String;
+
     fn description(&self) -> DeviceDescription;
+
     fn properties(&self) -> Properties {
         properties![]
     }
+
     fn actions(&self) -> Actions {
         actions![]
     }
+
     fn events(&self) -> Events {
         events![]
     }
-    fn full_description(&self) -> FullDeviceDescription {
-        let description = self.description();
 
+    fn build(self, device_handle: DeviceHandle) -> Self::Device;
+
+    #[doc(hidden)]
+    fn full_description(&self) -> Result<FullDeviceDescription, ApiError> {
         let mut property_descriptions = BTreeMap::new();
         for property_builder in self.properties() {
-            property_descriptions
-                .insert(property_builder.name(), property_builder.full_description());
+            property_descriptions.insert(
+                property_builder.name(),
+                property_builder.full_description()?,
+            );
         }
 
         let mut action_descriptions = BTreeMap::new();
@@ -232,25 +225,16 @@ pub trait DeviceBuilder {
 
         let mut event_descriptions = BTreeMap::new();
         for event in self.events() {
-            event_descriptions.insert(event.name(), event.full_description());
+            event_descriptions.insert(event.name(), event.full_description()?);
         }
 
-        FullDeviceDescription {
-            at_context: description.at_context,
-            at_type: description.at_type,
-            id: self.id(),
-            title: description.title,
-            description: description.description,
-            properties: Some(property_descriptions),
-            actions: Some(action_descriptions),
-            events: Some(event_descriptions),
-            links: description.links,
-            base_href: description.base_href,
-            pin: description.pin,
-            credentials_required: description.credentials_required,
-        }
+        Ok(self.description().into_full_description(
+            self.id(),
+            property_descriptions,
+            action_descriptions,
+            event_descriptions,
+        ))
     }
-    fn build(self, device_handle: DeviceHandle) -> Self::Device;
 }
 
 #[cfg(test)]
@@ -260,6 +244,7 @@ mod tests {
         action_description::{ActionDescription, NoInput},
         client::MockClient,
         device::DeviceHandle,
+        device_description::DeviceDescription,
         event::Event,
         event_description::EventDescription,
         property::{Property, PropertyBuilder, PropertyHandle},
@@ -268,7 +253,6 @@ mod tests {
     use async_trait::async_trait;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::Device as DeviceDescription;
 
     struct MockPropertyBuilder {
         property_name: String,
@@ -362,7 +346,7 @@ mod tests {
         }
 
         fn description(&self) -> EventDescription<Self::Data> {
-            todo!()
+            EventDescription::default()
         }
     }
 
@@ -374,26 +358,14 @@ mod tests {
         let property_name = String::from("property_name");
         let client = Arc::new(Mutex::new(MockClient::new()));
 
-        let device_description = DeviceDescription {
-            at_context: None,
-            at_type: None,
-            id: device_id,
-            title: None,
-            description: None,
-            properties: None,
-            actions: None,
-            events: None,
-            links: None,
-            base_href: None,
-            pin: None,
-            credentials_required: None,
-        };
+        let device_description = DeviceDescription::default();
 
         let mut device = DeviceHandle::new(
             client,
             Weak::new(),
             plugin_id,
             adapter_id,
+            device_id,
             device_description,
         );
 
@@ -410,26 +382,14 @@ mod tests {
         let action_name = String::from("action_name");
         let client = Arc::new(Mutex::new(MockClient::new()));
 
-        let device_description = DeviceDescription {
-            at_context: None,
-            at_type: None,
-            id: device_id,
-            title: None,
-            description: None,
-            properties: None,
-            actions: None,
-            events: None,
-            links: None,
-            base_href: None,
-            pin: None,
-            credentials_required: None,
-        };
+        let device_description = DeviceDescription::default();
 
         let mut device = DeviceHandle::new(
             client,
             Weak::new(),
             plugin_id,
             adapter_id,
+            device_id,
             device_description,
         );
 
@@ -446,26 +406,14 @@ mod tests {
         let event_name = String::from("event_name");
         let client = Arc::new(Mutex::new(MockClient::new()));
 
-        let device_description = DeviceDescription {
-            at_context: None,
-            at_type: None,
-            id: device_id,
-            title: None,
-            description: None,
-            properties: None,
-            actions: None,
-            events: None,
-            links: None,
-            base_href: None,
-            pin: None,
-            credentials_required: None,
-        };
+        let device_description = DeviceDescription::default();
 
         let mut device = DeviceHandle::new(
             client,
             Weak::new(),
             plugin_id,
             adapter_id,
+            device_id,
             device_description,
         );
 
