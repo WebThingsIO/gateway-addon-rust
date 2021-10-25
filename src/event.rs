@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for everything related to WoT events.
+
 pub use crate::event_description::*;
 use crate::{api_error::ApiError, client::Client, device::Device};
 use as_any::{AsAny, Downcast};
@@ -19,13 +21,47 @@ use webthings_gateway_ipc_types::{
     DeviceEventNotificationMessageData, Event as FullEventDescription, Message,
 };
 
+/// A trait used to specify the structure and behaviour of a WoT event.
+///
+/// Initialized with an [event handle][EventHandle].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, event::NoData};
+/// # use async_trait::async_trait;
+/// # use std::time::Duration;
+/// # use tokio::time::sleep;
+/// struct ExampleEvent();
+///
+/// #[async_trait]
+/// impl Event for ExampleEvent {
+///     type Data = NoData;
+///
+///     fn name(&self) -> String {
+///         "example-event".to_owned()
+///     }
+///     fn description(&self) -> EventDescription<Self::Data> {
+///         EventDescription::default()
+///     }
+///     fn init(&self, event_handle: EventHandle<Self::Data>) {
+///         tokio::spawn(async move {
+///             sleep(Duration::from_millis(1000)).await;
+///             event_handle.raise(NoData).await.unwrap();
+///         });
+///     }
+/// }
+/// ```
 pub trait Event: Send + Sync + 'static {
+    /// Type of [data][Data] this event contains.
     type Data: Data;
 
+    /// Name of the event.
     fn name(&self) -> String;
 
+    /// [WoT description][EventDescription] of the event.
     fn description(&self) -> EventDescription<Self::Data>;
 
+    /// Called once during initialization with an [event handle][EventHandle] which can later be used to raise event instances.
     fn init(&self, _event_handle: EventHandle<Self::Data>) {}
 
     #[doc(hidden)]
@@ -57,7 +93,15 @@ pub trait Event: Send + Sync + 'static {
     }
 }
 
+/// An object safe variant of [Event].
+///
+/// Auto-implemented for all objects which implement the [Event] trait.  **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [Event] implementation.
+///
+/// This can (in contrast to the [Event] trait) be used to store objects for dynamic dispatch.
 pub trait EventBase: Send + Sync + AsAny + 'static {
+    /// Name of the event.
     fn name(&self) -> String;
 
     #[doc(hidden)]
@@ -101,9 +145,13 @@ impl<T: Event> EventBase for T {
     }
 }
 
+/// A struct which represents an instance of a WoT event.
+///
+/// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct EventHandle<T: Data> {
     client: Arc<Mutex<dyn Client>>,
+    /// Reference to the [device][crate::device::Device] which owns this event.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
@@ -135,14 +183,25 @@ impl<T: Data> EventHandle<T> {
         }
     }
 
+    /// Raise a new event instance of this event.
     pub async fn raise(&self, data: T) -> Result<(), ApiError> {
         let data = Data::serialize(data)?;
         EventHandleBase::raise(self, data).await
     }
 }
 
+/// A non-generic variant of [EventHandle].
+///
+/// Auto-implemented for all objects which implement the [EventHandle] trait. **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [EventHandle] implementation.
+///
+/// This can be used to store [event handles][EventHandle] with different data together.
 #[async_trait]
 pub trait EventHandleBase: Send + Sync + AsAny + 'static {
+    /// Raise a new event instance of this event.
+    ///
+    /// Make sure that the type of the provided data is compatible.
     async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), ApiError>;
 }
 
@@ -169,13 +228,21 @@ impl<D: Data> EventHandleBase for EventHandle<D> {
     }
 }
 
+/// Convenience type for a collection of [EventBase].
 pub type Events = Vec<Box<dyn EventBase>>;
 
+/// Convenience macro for building an [Events].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, example::ExampleEvent};
+/// events![ExampleEvent::new()]
+/// # ;
+/// ```
 #[macro_export]
 macro_rules! events [
     ($($e:expr),*) => ({
-        let mut _temp = $crate::event::Events::new();
-        $(_temp.push(Box::new($e));)*
+        let _temp: Events = vec![$(Box::new($e)),*];
         _temp
     })
 ];

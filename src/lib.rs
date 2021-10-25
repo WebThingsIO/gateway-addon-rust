@@ -3,6 +3,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
+
+//! This crate makes it possible to write addons for the WebthingsIO gateway in Rust.
+//!
+//! To get started, have a look at a [complete example](https://github.com/WebThingsIO/example-adapter-rust).
+
 pub mod action;
 mod action_description;
 pub mod adapter;
@@ -13,11 +18,20 @@ pub mod device;
 mod device_description;
 pub mod event;
 mod event_description;
+#[doc(hidden)]
+pub mod example;
 pub mod plugin;
 pub mod property;
 mod property_description;
 pub mod type_;
 
+/// The purpose of this module is to condense imports almost every addon requires.
+///
+/// # Examples
+/// ```
+/// # #![allow(unused_imports)]
+/// use gateway_addon_rust::prelude::*;
+/// ```
 pub mod prelude {
     pub use crate::{
         action::{Action, ActionDescription, ActionHandle, Actions},

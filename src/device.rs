@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for everything related to WoT devices aka things.
+
 pub use crate::device_description::*;
 use crate::{
     action::{ActionBase, ActionHandle, Actions},
@@ -24,17 +26,37 @@ use std::{
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
+/// A trait used to specify the behaviour of a WoT device.
+///
+/// Wraps a [device handle][DeviceHandle] and defines how to react on gateway requests. Built by a [device builder][DeviceBuilder].
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::prelude::*;
+/// struct ExampleDevice(DeviceHandle);
+///
+/// impl Device for ExampleDevice {
+///     fn device_handle_mut(&mut self) -> &mut DeviceHandle {
+///         &mut self.0
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait Device: Send + Sync + AsAny + 'static {
+    /// Return the wrapped [device handle][DeviceHandle].
     fn device_handle_mut(&mut self) -> &mut DeviceHandle;
 }
 
 impl Downcast for dyn Device {}
 
+/// A struct which represents an instance of a WoT device.
+///
+/// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct DeviceHandle {
     client: Arc<Mutex<dyn Client>>,
     pub(crate) weak: Weak<Mutex<Box<dyn Device>>>,
+    /// Reference to the [adapter][crate::adapter::Adapter] which owns this device.
     pub adapter: Weak<Mutex<Box<dyn Adapter>>>,
     pub plugin_id: String,
     pub adapter_id: String,
@@ -82,14 +104,19 @@ impl DeviceHandle {
         self.properties.insert(name, property);
     }
 
+    /// Get a reference to all the [properties][crate::property::Property] which this device owns.
     pub fn properties(&self) -> &HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>> {
         &self.properties
     }
 
+    /// Get a [property][crate::property::Property] which this device owns by ID.
     pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
         self.properties.get(name).cloned()
     }
 
+    /// Set the value of a [property][crate::property::Property] which this device owns by ID.
+    ///
+    /// Make sure that the type of the provided value is compatible with the respective property.
     pub async fn set_property_value(
         &self,
         name: &str,
@@ -112,10 +139,12 @@ impl DeviceHandle {
         self.actions.insert(name, action);
     }
 
+    /// Get a reference to all the [actions][crate::action::Action] which this device owns.
     pub fn actions(&self) -> &HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>> {
         &self.actions
     }
 
+    /// Get an [action][crate::action::Action] which this device owns by ID.
     pub fn get_action(&self, name: &str) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
         self.actions.get(name).cloned()
     }
@@ -164,14 +193,19 @@ impl DeviceHandle {
         self.events.insert(name, event);
     }
 
+    /// Get a reference to all the [events][crate::event::Event] which this device owns.
     pub fn events(&self) -> &HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>> {
         &self.events
     }
 
+    /// Get an [event][crate::event::Event] which this device owns by ID.
     pub fn get_event(&self, name: &str) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
         self.events.get(name).cloned()
     }
 
+    /// Raise an [event][crate::event::Event] which this device owns by ID.
+    ///
+    /// Make sure that the type of the provided data is compatible with the respective event.
     pub async fn raise_event(
         &self,
         name: &str,
@@ -187,25 +221,82 @@ impl DeviceHandle {
     }
 }
 
+/// A trait used to specify the structure of a WoT device.
+///
+/// Builds a [Device] instance. Created through an [adapter][crate::adapter::Adapter].
+///
+/// # Examples
+/// ```
+/// # #[macro_use]
+/// # extern crate gateway_addon_rust;
+/// # use gateway_addon_rust::{prelude::*, example::{ExampleDevice, ExamplePropertyBuilder, ExampleEvent, ExampleAction}};
+/// # fn main() {}
+/// // ...
+/// pub struct ExampleDeviceBuilder();
+///
+/// impl DeviceBuilder for ExampleDeviceBuilder {
+///     type Device = ExampleDevice;
+///
+///     fn id(&self) -> String {
+///         "example-device".to_owned()
+///     }
+///
+///     fn description(&self) -> DeviceDescription {
+///         DeviceDescription::default()
+///     }
+///
+///     fn properties(&self) -> Properties {
+///         properties![ExamplePropertyBuilder::new()]
+///     }
+///
+///     fn actions(&self) -> Actions {
+///         actions![ExampleAction::new()]
+///     }
+///
+///     fn events(&self) -> Events {
+///         events![ExampleEvent::new()]
+///     }
+///
+///     fn build(self, device_handle: DeviceHandle) -> Self::Device {
+///         ExampleDevice::new(device_handle)
+///     }
+/// }
+/// ```
 pub trait DeviceBuilder: Send + Sync + 'static {
+    /// Type of [device][Device] this builds.
     type Device: Device;
 
+    /// ID of the device.
     fn id(&self) -> String;
 
+    /// [WoT description][DeviceDescription] of the device.
     fn description(&self) -> DeviceDescription;
 
+    /// A list of [properties][crate::property::PropertyBuilder] this device should own.
+    ///
+    /// Note that the desired list consists of boxed objects implementing [PropertyBuilderBase][crate::property::PropertyBuilderBase].
+    /// You can use the convenienve macro [properties!][crate::properties] to create this list [PropertyBuilder][crate::property::PropertyBuilder]s.
     fn properties(&self) -> Properties {
         properties![]
     }
 
+    /// A list of [actions][crate::action::Action] this device should own.
+    ///
+    /// Note that the desired list consists of boxed objects implementing [ActionBase][crate::action::ActionBase].
+    /// You can use the convenienve macro [actions!][crate::actions] to create this list from [Action][crate::action::Action]s.
     fn actions(&self) -> Actions {
         actions![]
     }
 
+    /// A list of [events][crate::event::Event] this device should own.
+    ///
+    /// Note that the desired list consists of boxed objects implementing [EventBase][crate::event::EventBase].
+    /// You can use the convenienve macro [events!][crate::events] to create this list from [Event][crate::event::Event]s.
     fn events(&self) -> Events {
         events![]
     }
 
+    /// Build a new instance of this device using the given [device handle][DeviceHandle].
     fn build(self, device_handle: DeviceHandle) -> Self::Device;
 
     #[doc(hidden)]

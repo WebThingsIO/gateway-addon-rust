@@ -3,18 +3,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
+
+//! Interacting with gateway databases.
+
 use crate::api_error::ApiError;
 use serde::{de::DeserializeOwned, Serialize};
 use sqlite::{Connection, Value};
 use std::{marker::PhantomData, path::PathBuf};
 
+/// A struct which represents a view into a gateway database.
 pub struct Database<T: Serialize + DeserializeOwned> {
+    /// Location of the database file.
     pub path: PathBuf,
+    /// ID of the [plugin][crate::plugin::Plugin] associated with this view into the database.
     pub plugin_id: String,
     _config: PhantomData<T>,
 }
 
 impl<T: Serialize + DeserializeOwned> Database<T> {
+    /// Open an existing gateway database.
     pub fn new(mut path: PathBuf, plugin_id: String) -> Self {
         path.push("db.sqlite3");
 
@@ -25,6 +32,7 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
         }
     }
 
+    /// Load config for the associated [plugin][crate::plugin::Plugin] from database.
     pub fn load_config(&self) -> Result<Option<T>, ApiError> {
         let json = self.load_string()?;
 
@@ -34,6 +42,7 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
         }
     }
 
+    /// Load raw string for the associated [plugin][crate::plugin::Plugin] from database.
     pub fn load_string(&self) -> Result<Option<String>, ApiError> {
         let key = self.key();
         let connection = self.open()?;
@@ -56,12 +65,14 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
         Ok(s)
     }
 
+    /// Save config for the associated [plugin][crate::plugin::Plugin] to database.
     pub fn save_config(&self, t: &T) -> Result<(), ApiError> {
         let json = serde_json::to_string(t).map_err(ApiError::Serialization)?;
         self.save_string(json)?;
         Ok(())
     }
 
+    /// Save raw string for the associated [plugin][crate::plugin::Plugin] to database.
     pub fn save_string(&self, s: String) -> Result<(), ApiError> {
         log::trace!("Saving settings string {}", s);
         let key = self.key();

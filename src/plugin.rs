@@ -3,6 +3,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
+
+//! Connection to the WebthingsIO gateway.
+
 use crate::{
     adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
@@ -27,6 +30,7 @@ use webthings_gateway_ipc_types::{
 const GATEWAY_URL: &str = "ws://localhost:9500";
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
+/// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
 #[cfg(not(test))]
 pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
@@ -120,6 +124,19 @@ async fn read(
     })
 }
 
+/// A struct which represents a successfully established connection to a WebthingsIO gateway.
+///
+/// # Examples
+/// ```no_run
+/// # use gateway_addon_rust::{plugin::connect, api_error::ApiError};
+/// #[tokio::main]
+/// async fn main() -> Result<(), ApiError> {
+///     let mut plugin = connect("example-addon").await?;
+///     // ...
+///     plugin.event_loop().await;
+///     Ok(())
+/// }
+/// ```
 pub struct Plugin {
     pub plugin_id: String,
     pub preferences: Preferences,
@@ -137,6 +154,9 @@ pub(crate) enum MessageResult {
 }
 
 impl Plugin {
+    /// Start the event loop of this plugin.
+    ///
+    /// This will block your current thread.
     #[cfg(not(test))]
     pub async fn event_loop(&mut self) {
         loop {
@@ -377,6 +397,7 @@ impl Plugin {
         }
     }
 
+    /// Borrow the adapter with the given id.
     pub fn borrow_adapter(
         &mut self,
         adapter_id: &str,
@@ -386,6 +407,23 @@ impl Plugin {
             .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
     }
 
+    /// Create a new adapter.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), ApiError> {
+    /// #   let mut plugin = connect("example-addon").await?;
+    /// let adapter = plugin
+    ///     .create_adapter("example_adapter", "Example Adapter", |adapter_handle| {
+    ///         ExampleAdapter::new(adapter_handle)
+    ///     })
+    ///     .await?;
+    /// #   plugin.event_loop().await;
+    /// #   Ok(())
+    /// # }
+    /// ```
     pub async fn create_adapter<T, F, S>(
         &mut self,
         adapter_id: S,
@@ -422,6 +460,7 @@ impl Plugin {
         Ok(adapter)
     }
 
+    /// Unload this plugin.
     pub async fn unload(&self) -> Result<(), ApiError> {
         let message: Message = PluginUnloadResponseMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -431,6 +470,9 @@ impl Plugin {
         self.client.lock().await.send_message(&message).await
     }
 
+    /// Fail this plugin.
+    ///
+    /// This should be done when an error occurs which we cannot recover from.
     pub async fn fail(&self, message: String) -> Result<(), ApiError> {
         let message: Message = PluginErrorNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -447,6 +489,7 @@ impl Plugin {
         process::exit(DONT_RESTART_EXIT_CODE);
     }
 
+    /// Get the associated config database of this plugin.
     pub fn get_config_database<T: Serialize + DeserializeOwned>(&self) -> Database<T> {
         let config_path = PathBuf::from(self.user_profile.config_dir.clone());
         Database::new(config_path, self.plugin_id.clone())
