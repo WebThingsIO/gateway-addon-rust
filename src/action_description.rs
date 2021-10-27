@@ -71,9 +71,11 @@ pub struct ActionDescription<T: Input> {
 ///             }
 ///         }))
 ///     }
+///
 ///     fn description(description: ActionDescription<Self>) -> ActionDescription<Self> {
 ///         description.at_type(AtType::FadeAction)
 ///     }
+///
 ///     fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
 ///         Ok(Self{
 ///             level: value.as_object().unwrap().get("level").unwrap().as_u64().unwrap() as _,

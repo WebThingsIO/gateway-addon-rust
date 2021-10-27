@@ -359,16 +359,16 @@ mod tests {
         type Property = MockProperty;
         type Value = i32;
 
+        fn name(&self) -> String {
+            self.property_name.to_owned()
+        }
+
         fn description(&self) -> PropertyDescription<Self::Value> {
             PropertyDescription::default()
         }
 
         fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
             MockProperty::new(property_handle)
-        }
-
-        fn name(&self) -> String {
-            self.property_name.to_owned()
         }
     }
 

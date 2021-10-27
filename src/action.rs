@@ -38,9 +38,11 @@ use webthings_gateway_ipc_types::{
 ///     fn name(&self) -> String {
 ///         "example-action".to_owned()
 ///     }
+///
 ///     fn description(&self) -> ActionDescription<Self::Input> {
 ///         ActionDescription::default()
 ///     }
+///
 ///     async fn perform(
 ///         &mut self,
 ///         mut action_handle: ActionHandle<Self::Input>,
@@ -142,9 +144,11 @@ impl<T: Action> ActionBase for T {
     fn name(&self) -> String {
         <T as Action>::name(self)
     }
+
     fn full_description(&self) -> FullActionDescription {
         <T as Action>::full_description(self)
     }
+
     async fn check_and_perform(
         &mut self,
         action_handle: ActionHandle<serde_json::Value>,
