@@ -86,6 +86,7 @@ impl<T: Property> PropertyBase for T {
     fn property_handle_mut(&mut self) -> &mut dyn PropertyHandleBase {
         <T as Property>::property_handle_mut(self)
     }
+
     async fn on_update(&mut self, value: serde_json::Value) -> Result<(), String> {
         let value = T::Value::deserialize(Some(value))
             .map_err(|err| format!("Could not deserialize value: {:?}", err))?;
@@ -273,9 +274,11 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
     fn name(&self) -> String {
         <T as PropertyBuilder>::name(self)
     }
+
     fn full_description(&self) -> Result<FullPropertyDescription, ApiError> {
         <T as PropertyBuilder>::full_description(self)
     }
+
     #[doc(hidden)]
     fn build(
         self: Box<Self>,

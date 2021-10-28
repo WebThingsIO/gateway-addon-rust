@@ -161,6 +161,7 @@ impl SimpleValue for i8 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -170,6 +171,7 @@ impl SimpleValue for i16 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -179,6 +181,7 @@ impl SimpleValue for i32 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -188,6 +191,7 @@ impl SimpleValue for u8 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -197,6 +201,7 @@ impl SimpleValue for u16 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -206,6 +211,7 @@ impl SimpleValue for u32 {
     fn type_() -> Type {
         Type::Integer
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -215,6 +221,7 @@ impl SimpleValue for f32 {
     fn type_() -> Type {
         Type::Number
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }
@@ -224,6 +231,7 @@ impl SimpleValue for f64 {
     fn type_() -> Type {
         Type::Number
     }
+
     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
         description.minimum(Self::MIN).maximum(Self::MAX)
     }

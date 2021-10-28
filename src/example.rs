@@ -49,6 +49,7 @@ impl ExampleAdapter {
     pub fn new(adapter_handle: AdapterHandle) -> Self {
         Self(adapter_handle)
     }
+
     async fn init(&mut self) -> Result<(), ApiError> {
         self.adapter_handle_mut()
             .add_device(ExampleDeviceBuilder::new())
@@ -159,9 +160,11 @@ impl Action for ExampleAction {
     fn name(&self) -> String {
         "example-action".to_owned()
     }
+
     fn description(&self) -> ActionDescription<Self::Input> {
         ActionDescription::default()
     }
+
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String> {
         Ok(())
     }

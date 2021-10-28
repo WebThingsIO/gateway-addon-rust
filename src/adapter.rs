@@ -51,6 +51,7 @@ use webthings_gateway_ipc_types::{
 /// #   pub fn new(adapter_handle: AdapterHandle) -> Self {
 /// #       Self(adapter_handle)
 /// #   }
+///
 ///     pub async fn init(&mut self) -> Result<(), ApiError> {
 ///         self.adapter_handle_mut()
 ///             .add_device(ExampleDeviceBuilder::new())
@@ -309,8 +310,8 @@ mod tests {
     impl DeviceBuilder for MockDeviceBuilder {
         type Device = MockDevice;
 
-        fn build(self, device_handle: DeviceHandle) -> Self::Device {
-            MockDevice::new(device_handle)
+        fn id(&self) -> String {
+            self.device_id.clone()
         }
 
         fn description(&self) -> DeviceDescription {
@@ -321,8 +322,8 @@ mod tests {
             Vec::new()
         }
 
-        fn id(&self) -> String {
-            self.device_id.clone()
+        fn build(self, device_handle: DeviceHandle) -> Self::Device {
+            MockDevice::new(device_handle)
         }
     }
 

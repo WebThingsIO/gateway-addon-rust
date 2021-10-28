@@ -81,6 +81,7 @@ impl Input for Null {
     fn input() -> Option<serde_json::Value> {
         Some(json!({"type": "null"}))
     }
+
     fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
         match value {
             serde_json::Value::Null => Ok(Null),
