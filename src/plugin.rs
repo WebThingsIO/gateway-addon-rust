@@ -9,24 +9,38 @@
 use crate::{
     adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
-    client::{Client, WebsocketClient},
+    client::{Client, ClientExt},
     database::Database,
 };
-use futures::{prelude::*, stream::SplitStream};
+use futures::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, path::PathBuf, process, str::FromStr, sync::Arc, time::Duration};
-use tokio::{net::TcpStream, sync::Mutex, time::sleep};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use url::Url;
+use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
+use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
     AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRequestActionRequest,
     DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    Message, Message as IPCMessage, PluginErrorNotificationMessageData,
-    PluginRegisterRequestMessageData, PluginRegisterResponseMessageData, PluginUnloadRequest,
+    Message, Message as IPCMessage, PluginErrorNotificationMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
 
+#[cfg(not(test))]
+use {
+    futures::stream::SplitStream,
+    std::str::FromStr,
+    tokio::net::TcpStream,
+    tokio_tungstenite::connect_async,
+    tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
+    url::Url,
+    webthings_gateway_ipc_types::{
+        PluginRegisterRequestMessageData, PluginRegisterResponseMessageData,
+    },
+};
+
+#[cfg(test)]
+use webthings_gateway_ipc_types::Units;
+
+#[cfg(not(test))]
 const GATEWAY_URL: &str = "ws://localhost:9500";
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
@@ -38,7 +52,7 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
 
     let (sink, mut stream) = socket.split();
-    let mut client = WebsocketClient::new(sink);
+    let mut client = Client::new(sink);
 
     let message: IPCMessage = PluginRegisterRequestMessageData {
         plugin_id: plugin_id.to_owned(),
@@ -78,10 +92,10 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
 }
 
 #[cfg(test)]
-pub fn connect<S: Into<String>>(plugin_id: S) -> (Plugin, Arc<Mutex<crate::client::MockClient>>) {
+pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
     let preferences = Preferences {
         language: "en-US".to_owned(),
-        units: webthings_gateway_ipc_types::Units {
+        units: Units {
             temperature: "degree celsius".to_owned(),
         },
     };
@@ -94,19 +108,17 @@ pub fn connect<S: Into<String>>(plugin_id: S) -> (Plugin, Arc<Mutex<crate::clien
         log_dir: "".to_owned(),
         media_dir: "".to_owned(),
     };
-    let client = Arc::new(Mutex::new(crate::client::MockClient::new()));
-    (
-        Plugin {
-            plugin_id: plugin_id.into(),
-            preferences,
-            user_profile,
-            client: client.clone(),
-            adapters: HashMap::new(),
-        },
-        client,
-    )
+    let client = Arc::new(Mutex::new(Client::new()));
+    Plugin {
+        plugin_id: plugin_id.into(),
+        preferences,
+        user_profile,
+        client: client.clone(),
+        adapters: HashMap::new(),
+    }
 }
 
+#[cfg(not(test))]
 async fn read(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> Option<Result<IPCMessage, String>> {
@@ -141,7 +153,7 @@ pub struct Plugin {
     pub plugin_id: String,
     pub preferences: Preferences,
     pub user_profile: UserProfile,
-    client: Arc<Mutex<dyn Client>>,
+    pub(crate) client: Arc<Mutex<Client>>,
     #[cfg(not(test))]
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,

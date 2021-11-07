@@ -54,7 +54,7 @@ impl Downcast for dyn Device {}
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct DeviceHandle {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     pub(crate) weak: Weak<Mutex<Box<dyn Device>>>,
     /// Reference to the [adapter][crate::adapter::Adapter] which owns this device.
     pub adapter: Weak<Mutex<Box<dyn Adapter>>>,
@@ -69,7 +69,7 @@ pub struct DeviceHandle {
 
 impl DeviceHandle {
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         adapter: Weak<Mutex<Box<dyn Adapter>>>,
         plugin_id: String,
         adapter_id: String,
@@ -333,7 +333,7 @@ mod tests {
     use crate::{
         action::{Action, ActionHandle},
         action_description::{ActionDescription, NoInput},
-        client::MockClient,
+        client::Client,
         device::DeviceHandle,
         device_description::DeviceDescription,
         event::Event,
@@ -447,7 +447,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let property_name = String::from("property_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 
@@ -471,7 +471,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let action_name = String::from("action_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 
@@ -495,7 +495,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let event_name = String::from("event_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 

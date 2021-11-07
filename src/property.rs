@@ -7,7 +7,11 @@
 //! A module for everything related to WoT properties.
 
 pub use crate::property_description::*;
-use crate::{api_error::ApiError, client::Client, device::Device};
+use crate::{
+    api_error::ApiError,
+    client::{Client, ClientExt},
+    device::Device,
+};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -99,7 +103,7 @@ impl<T: Property> PropertyBase for T {
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct PropertyHandle<T: Value> {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     /// Reference to the [device][crate::device::Device] which owns this property.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
@@ -112,7 +116,7 @@ pub struct PropertyHandle<T: Value> {
 
 impl<T: Value> PropertyHandle<T> {
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -226,7 +230,7 @@ pub trait PropertyBuilder: Send + Sync + 'static {
     #[allow(clippy::too_many_arguments)]
     fn build_(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -262,7 +266,7 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
     #[doc(hidden)]
     fn build(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -282,7 +286,7 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
     #[doc(hidden)]
     fn build(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -315,7 +319,7 @@ macro_rules! properties [
 
 #[cfg(test)]
 mod tests {
-    use crate::{client::MockClient, property::PropertyHandle, PropertyDescription};
+    use crate::{client::Client, property::PropertyHandle, PropertyDescription};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -327,7 +331,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let property_name = String::from("property_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
         let value = 42;
 
         let property_description = PropertyDescription::<i32>::default();

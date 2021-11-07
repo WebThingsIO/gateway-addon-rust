@@ -8,7 +8,7 @@
 
 use crate::{
     api_error::ApiError,
-    client::Client,
+    client::{Client, ClientExt},
     device::{self, Device, DeviceBuilder},
 };
 use as_any::{AsAny, Downcast};
@@ -123,7 +123,7 @@ impl Downcast for dyn Adapter {}
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct AdapterHandle {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     pub(crate) weak: Weak<Mutex<Box<dyn Adapter>>>,
     pub plugin_id: String,
     pub adapter_id: String,
@@ -131,11 +131,7 @@ pub struct AdapterHandle {
 }
 
 impl AdapterHandle {
-    pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
-        plugin_id: String,
-        adapter_id: String,
-    ) -> Self {
+    pub(crate) fn new(client: Arc<Mutex<Client>>, plugin_id: String, adapter_id: String) -> Self {
         Self {
             client,
             weak: Weak::new(),
@@ -255,7 +251,6 @@ impl AdapterHandle {
 mod tests {
     use crate::{
         adapter::{Adapter, AdapterHandle},
-        client::MockClient,
         device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
         plugin::{connect, Plugin},
@@ -329,13 +324,13 @@ mod tests {
 
     async fn create_mock_adapter(
         plugin: &mut Plugin,
-        client: Arc<Mutex<MockClient>>,
         adapter_id: &str,
     ) -> Arc<Mutex<Box<dyn Adapter>>> {
         let plugin_id = plugin.plugin_id.to_owned();
         let adapter_id_copy = adapter_id.to_owned();
 
-        client
+        plugin
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -356,7 +351,6 @@ mod tests {
 
     async fn create_mock_device(
         adapter: Arc<Mutex<Box<dyn Adapter>>>,
-        client: Arc<Mutex<MockClient>>,
         device_id: &str,
     ) -> Arc<Mutex<Box<dyn Device>>> {
         let device_builder = MockDeviceBuilder::new(device_id.to_owned());
@@ -367,7 +361,8 @@ mod tests {
         let plugin_id = adapter.plugin_id.to_owned();
         let adapter_id = adapter.adapter_id.to_owned();
 
-        client
+        adapter
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -389,8 +384,8 @@ mod tests {
     async fn test_create_adapter() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
-        let (mut plugin, client) = connect(&plugin_id);
-        create_mock_adapter(&mut plugin, client, &adapter_id).await;
+        let mut plugin = connect(&plugin_id);
+        create_mock_adapter(&mut plugin, &adapter_id).await;
         assert!(plugin.borrow_adapter(&adapter_id).is_ok());
     }
 
@@ -399,9 +394,9 @@ mod tests {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
-        let (mut plugin, client) = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
-        create_mock_device(adapter.clone(), client, &device_id).await;
+        let mut plugin = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
+        create_mock_device(adapter.clone(), &device_id).await;
 
         assert!(adapter
             .lock()
@@ -417,9 +412,9 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let device_id_copy = device_id.clone();
-        let (mut plugin, client) = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
-        create_mock_device(adapter.clone(), client.clone(), &device_id).await;
+        let mut plugin = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
+        create_mock_device(adapter.clone(), &device_id).await;
 
         let message: Message = AdapterRemoveDeviceRequestMessageData {
             device_id: device_id.clone(),
@@ -428,7 +423,8 @@ mod tests {
         }
         .into();
 
-        client
+        plugin
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -461,10 +457,11 @@ mod tests {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
 
-        let (mut plugin, client) = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, client.clone(), &adapter_id).await;
+        let mut plugin = connect(&plugin_id);
+        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
 
-        client
+        plugin
+            .client
             .lock()
             .await
             .expect_send_message()

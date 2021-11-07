@@ -7,7 +7,11 @@
 //! A module for everything related to WoT events.
 
 pub use crate::event_description::*;
-use crate::{api_error::ApiError, client::Client, device::Device};
+use crate::{
+    api_error::ApiError,
+    client::{Client, ClientExt},
+    device::Device,
+};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -72,7 +76,7 @@ pub trait Event: Send + Sync + 'static {
     #[doc(hidden)]
     fn build_event_handle(
         &self,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -110,7 +114,7 @@ pub trait EventBase: Send + Sync + AsAny + 'static {
     #[doc(hidden)]
     fn build_event_handle(
         &self,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -132,7 +136,7 @@ impl<T: Event> EventBase for T {
 
     fn build_event_handle(
         &self,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -150,7 +154,7 @@ impl<T: Event> EventBase for T {
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct EventHandle<T: Data> {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     /// Reference to the [device][crate::device::Device] which owns this event.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
@@ -163,7 +167,7 @@ pub struct EventHandle<T: Data> {
 
 impl<T: Data> EventHandle<T> {
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -249,7 +253,7 @@ macro_rules! events [
 
 #[cfg(test)]
 mod tests {
-    use crate::{client::MockClient, event::EventHandle, event_description::EventDescription};
+    use crate::{client::Client, event::EventHandle, event_description::EventDescription};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -261,7 +265,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let event_name = String::from("event_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
         let data = json!(42);
 
         let event_description = EventDescription::default();

@@ -7,7 +7,11 @@
 //! A module for everything related to WoT actions.
 
 pub use crate::action_description::*;
-use crate::{api_error::ApiError, client::Client, device::Device};
+use crate::{
+    api_error::ApiError,
+    client::{Client, ClientExt},
+    device::Device,
+};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -181,7 +185,7 @@ impl ToString for Status {
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct ActionHandle<T: Input> {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     /// Reference to the [device][crate::device::Device] which owns this action.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
@@ -199,7 +203,7 @@ pub struct ActionHandle<T: Input> {
 impl<T: Input> ActionHandle<T> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -283,7 +287,7 @@ macro_rules! actions [
 
 #[cfg(test)]
 mod tests {
-    use crate::{action::ActionHandle, action_description::NoInput, client::MockClient};
+    use crate::{action::ActionHandle, action_description::NoInput, client::Client};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -296,7 +300,7 @@ mod tests {
         let device_id = String::from("device_id");
         let action_name = String::from("action_name");
         let action_id = String::from("action_id");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
         let input = json!(null);
 
         let mut action = ActionHandle::new(
@@ -341,7 +345,7 @@ mod tests {
         let device_id = String::from("device_id");
         let action_name = String::from("action_name");
         let action_id = String::from("action_id");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
         let input = json!(null);
 
         let mut action = ActionHandle::new(
