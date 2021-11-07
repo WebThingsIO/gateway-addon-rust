@@ -251,12 +251,12 @@ impl AdapterHandle {
 pub(crate) mod tests {
     use crate::{
         adapter::{Adapter, AdapterHandle},
+        client::Client,
         device::{tests::MockDeviceBuilder, Device, DeviceBuilder},
-        plugin::{connect, Plugin},
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
+    use webthings_gateway_ipc_types::Message;
 
     pub struct MockAdapter {
         adapter_handle: AdapterHandle,
@@ -274,42 +274,13 @@ pub(crate) mod tests {
         }
     }
 
-    async fn create_mock_adapter(
-        plugin: &mut Plugin,
-        adapter_id: &str,
-    ) -> Arc<Mutex<Box<dyn Adapter>>> {
-        let plugin_id = plugin.plugin_id.to_owned();
-        let adapter_id_copy = adapter_id.to_owned();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::AdapterAddedNotification(msg) => {
-                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_copy
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin
-            .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
-            .await
-            .unwrap()
-    }
-
-    async fn create_mock_device(
-        adapter: Arc<Mutex<Box<dyn Adapter>>>,
+    pub async fn add_mock_device(
+        adapter: &mut AdapterHandle,
         device_id: &str,
     ) -> Arc<Mutex<Box<dyn Device>>> {
         let device_builder = MockDeviceBuilder::new(device_id.to_owned());
         let expected_description = device_builder.full_description().unwrap();
 
-        let mut adapter = adapter.lock().await;
-        let adapter = adapter.adapter_handle_mut();
         let plugin_id = adapter.plugin_id.to_owned();
         let adapter_id = adapter.adapter_id.to_owned();
 
@@ -333,86 +304,28 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_adapter() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let mut plugin = connect(&plugin_id);
-        create_mock_adapter(&mut plugin, &adapter_id).await;
-        assert!(plugin.borrow_adapter(&adapter_id).is_ok());
-    }
-
-    #[tokio::test]
     async fn test_add_device() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
-        let mut plugin = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
-        create_mock_device(adapter.clone(), &device_id).await;
+        let client = Arc::new(Mutex::new(Client::new()));
 
-        assert!(adapter
-            .lock()
-            .await
-            .adapter_handle_mut()
-            .get_device(&device_id)
-            .is_some())
-    }
+        let mut adapter = AdapterHandle::new(client.clone(), plugin_id, adapter_id);
 
-    #[tokio::test]
-    async fn test_remove_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let device_id_copy = device_id.clone();
-        let mut plugin = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
-        create_mock_device(adapter.clone(), &device_id).await;
+        add_mock_device(&mut adapter, &device_id).await;
 
-        let message: Message = AdapterRemoveDeviceRequestMessageData {
-            device_id: device_id.clone(),
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.to_owned(),
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::AdapterRemoveDeviceResponse(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin
-            .handle_message(message)
-            .await
-            .expect("Handle message");
-
-        assert!(adapter
-            .lock()
-            .await
-            .adapter_handle_mut()
-            .get_device(&device_id_copy)
-            .is_none())
+        assert!(adapter.get_device(&device_id).is_some())
     }
 
     #[tokio::test]
     async fn test_unload() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
+        let client = Arc::new(Mutex::new(Client::new()));
 
-        let mut plugin = connect(&plugin_id);
-        let adapter = create_mock_adapter(&mut plugin, &adapter_id).await;
+        let adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
 
-        plugin
+        adapter
             .client
             .lock()
             .await
@@ -426,12 +339,6 @@ pub(crate) mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter
-            .lock()
-            .await
-            .adapter_handle_mut()
-            .unload()
-            .await
-            .unwrap();
+        adapter.unload().await.unwrap();
     }
 }

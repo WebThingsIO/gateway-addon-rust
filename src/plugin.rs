@@ -507,3 +507,96 @@ impl Plugin {
         Database::new(config_path, self.plugin_id.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        adapter::{
+            tests::{add_mock_device, MockAdapter},
+            Adapter,
+        },
+        plugin::{connect, Plugin},
+    };
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
+
+    async fn add_mock_adapter(
+        plugin: &mut Plugin,
+        adapter_id: &str,
+    ) -> Arc<Mutex<Box<dyn Adapter>>> {
+        let plugin_id = plugin.plugin_id.to_owned();
+        let adapter_id_copy = adapter_id.to_owned();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterAddedNotification(msg) => {
+                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_copy
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin
+            .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_create_adapter() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let mut plugin = connect(&plugin_id);
+        add_mock_adapter(&mut plugin, &adapter_id).await;
+        assert!(plugin.borrow_adapter(&adapter_id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_remove_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let device_id_copy = device_id.clone();
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+
+        let message: Message = AdapterRemoveDeviceRequestMessageData {
+            device_id: device_id.clone(),
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.to_owned(),
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterRemoveDeviceResponse(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+
+        assert!(adapter
+            .lock()
+            .await
+            .adapter_handle_mut()
+            .get_device(&device_id_copy)
+            .is_none())
+    }
+}
