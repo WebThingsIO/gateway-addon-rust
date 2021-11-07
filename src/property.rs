@@ -318,12 +318,60 @@ macro_rules! properties [
 ];
 
 #[cfg(test)]
-mod tests {
-    use crate::{client::Client, property::PropertyHandle, PropertyDescription};
+pub(crate) mod tests {
+    use crate::{
+        client::Client,
+        property::{Property, PropertyBuilder, PropertyHandle},
+        property_description::PropertyDescription,
+    };
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
+
+    pub struct MockPropertyBuilder {
+        property_name: String,
+    }
+
+    impl MockPropertyBuilder {
+        pub fn new(property_name: String) -> Self {
+            Self { property_name }
+        }
+    }
+
+    impl PropertyBuilder for MockPropertyBuilder {
+        type Property = MockProperty;
+        type Value = i32;
+
+        fn name(&self) -> String {
+            self.property_name.to_owned()
+        }
+
+        fn description(&self) -> PropertyDescription<Self::Value> {
+            PropertyDescription::default()
+        }
+
+        fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
+            MockProperty::new(property_handle)
+        }
+    }
+
+    pub struct MockProperty {
+        property_handle: PropertyHandle<i32>,
+    }
+
+    impl MockProperty {
+        pub fn new(property_handle: PropertyHandle<i32>) -> Self {
+            MockProperty { property_handle }
+        }
+    }
+
+    impl Property for MockProperty {
+        type Value = i32;
+        fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
+            &mut self.property_handle
+        }
+    }
 
     #[tokio::test]
     async fn test_set_value() {

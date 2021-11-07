@@ -252,12 +252,38 @@ macro_rules! events [
 ];
 
 #[cfg(test)]
-mod tests {
-    use crate::{client::Client, event::EventHandle, event_description::EventDescription};
+pub(crate) mod tests {
+    use crate::{
+        client::Client,
+        event::{Event, EventHandle},
+        event_description::EventDescription,
+    };
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
+
+    pub struct MockEvent {
+        event_name: String,
+    }
+
+    impl MockEvent {
+        pub fn new(event_name: String) -> Self {
+            Self { event_name }
+        }
+    }
+
+    impl Event for MockEvent {
+        type Data = u32;
+
+        fn name(&self) -> String {
+            self.event_name.clone()
+        }
+
+        fn description(&self) -> EventDescription<Self::Data> {
+            EventDescription::default()
+        }
+    }
 
     #[tokio::test]
     async fn test_raise_event() {

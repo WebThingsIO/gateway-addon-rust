@@ -286,12 +286,47 @@ macro_rules! actions [
 ];
 
 #[cfg(test)]
-mod tests {
-    use crate::{action::ActionHandle, action_description::NoInput, client::Client};
+pub(crate) mod tests {
+    use crate::{
+        action::{Action, ActionHandle},
+        action_description::{ActionDescription, NoInput},
+        client::Client,
+    };
+    use async_trait::async_trait;
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
+
+    pub struct MockAction {
+        action_name: String,
+    }
+
+    impl MockAction {
+        pub fn new(action_name: String) -> Self {
+            Self { action_name }
+        }
+    }
+
+    #[async_trait]
+    impl Action for MockAction {
+        type Input = NoInput;
+
+        fn name(&self) -> String {
+            self.action_name.to_owned()
+        }
+
+        fn description(&self) -> ActionDescription<Self::Input> {
+            ActionDescription::default()
+        }
+
+        async fn perform(
+            &mut self,
+            _action_handle: ActionHandle<Self::Input>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn test_action_start() {

@@ -248,19 +248,17 @@ impl AdapterHandle {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::{
         adapter::{Adapter, AdapterHandle},
-        device::{Device, DeviceBuilder, DeviceHandle},
-        device_description::DeviceDescription,
+        device::{tests::MockDeviceBuilder, Device, DeviceBuilder},
         plugin::{connect, Plugin},
-        property::PropertyBuilderBase,
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
 
-    struct MockAdapter {
+    pub struct MockAdapter {
         adapter_handle: AdapterHandle,
     }
 
@@ -273,52 +271,6 @@ mod tests {
     impl Adapter for MockAdapter {
         fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
             &mut self.adapter_handle
-        }
-    }
-
-    struct MockDevice {
-        device_handle: DeviceHandle,
-    }
-
-    impl MockDevice {
-        pub fn new(device_handle: DeviceHandle) -> Self {
-            MockDevice { device_handle }
-        }
-    }
-
-    impl Device for MockDevice {
-        fn device_handle_mut(&mut self) -> &mut DeviceHandle {
-            &mut self.device_handle
-        }
-    }
-
-    struct MockDeviceBuilder {
-        device_id: String,
-    }
-
-    impl MockDeviceBuilder {
-        pub fn new(device_id: String) -> Self {
-            Self { device_id }
-        }
-    }
-
-    impl DeviceBuilder for MockDeviceBuilder {
-        type Device = MockDevice;
-
-        fn id(&self) -> String {
-            self.device_id.clone()
-        }
-
-        fn description(&self) -> DeviceDescription {
-            DeviceDescription::default()
-        }
-
-        fn properties(&self) -> Vec<Box<dyn PropertyBuilderBase>> {
-            Vec::new()
-        }
-
-        fn build(self, device_handle: DeviceHandle) -> Self::Device {
-            MockDevice::new(device_handle)
         }
     }
 
