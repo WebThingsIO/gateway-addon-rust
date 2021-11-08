@@ -9,24 +9,38 @@
 use crate::{
     adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
-    client::{Client, WebsocketClient},
+    client::{Client, ClientExt},
     database::Database,
 };
-use futures::{prelude::*, stream::SplitStream};
+use futures::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, path::PathBuf, process, str::FromStr, sync::Arc, time::Duration};
-use tokio::{net::TcpStream, sync::Mutex, time::sleep};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use url::Url;
+use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
+use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
     AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRequestActionRequest,
     DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    Message, Message as IPCMessage, PluginErrorNotificationMessageData,
-    PluginRegisterRequestMessageData, PluginRegisterResponseMessageData, PluginUnloadRequest,
+    Message, Message as IPCMessage, PluginErrorNotificationMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
 
+#[cfg(not(test))]
+use {
+    futures::stream::SplitStream,
+    std::str::FromStr,
+    tokio::net::TcpStream,
+    tokio_tungstenite::connect_async,
+    tokio_tungstenite::{MaybeTlsStream, WebSocketStream},
+    url::Url,
+    webthings_gateway_ipc_types::{
+        PluginRegisterRequestMessageData, PluginRegisterResponseMessageData,
+    },
+};
+
+#[cfg(test)]
+use webthings_gateway_ipc_types::Units;
+
+#[cfg(not(test))]
 const GATEWAY_URL: &str = "ws://localhost:9500";
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
@@ -38,7 +52,7 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
     let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
 
     let (sink, mut stream) = socket.split();
-    let mut client = WebsocketClient::new(sink);
+    let mut client = Client::new(sink);
 
     let message: IPCMessage = PluginRegisterRequestMessageData {
         plugin_id: plugin_id.to_owned(),
@@ -78,10 +92,10 @@ pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
 }
 
 #[cfg(test)]
-pub fn connect<S: Into<String>>(plugin_id: S) -> (Plugin, Arc<Mutex<crate::client::MockClient>>) {
+pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
     let preferences = Preferences {
         language: "en-US".to_owned(),
-        units: webthings_gateway_ipc_types::Units {
+        units: Units {
             temperature: "degree celsius".to_owned(),
         },
     };
@@ -94,19 +108,17 @@ pub fn connect<S: Into<String>>(plugin_id: S) -> (Plugin, Arc<Mutex<crate::clien
         log_dir: "".to_owned(),
         media_dir: "".to_owned(),
     };
-    let client = Arc::new(Mutex::new(crate::client::MockClient::new()));
-    (
-        Plugin {
-            plugin_id: plugin_id.into(),
-            preferences,
-            user_profile,
-            client: client.clone(),
-            adapters: HashMap::new(),
-        },
-        client,
-    )
+    let client = Arc::new(Mutex::new(Client::new()));
+    Plugin {
+        plugin_id: plugin_id.into(),
+        preferences,
+        user_profile,
+        client: client.clone(),
+        adapters: HashMap::new(),
+    }
 }
 
+#[cfg(not(test))]
 async fn read(
     stream: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> Option<Result<IPCMessage, String>> {
@@ -141,7 +153,7 @@ pub struct Plugin {
     pub plugin_id: String,
     pub preferences: Preferences,
     pub user_profile: UserProfile,
-    client: Arc<Mutex<dyn Client>>,
+    pub(crate) client: Arc<Mutex<Client>>,
     #[cfg(not(test))]
     stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
@@ -493,5 +505,98 @@ impl Plugin {
     pub fn get_config_database<T: Serialize + DeserializeOwned>(&self) -> Database<T> {
         let config_path = PathBuf::from(self.user_profile.config_dir.clone());
         Database::new(config_path, self.plugin_id.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        adapter::{
+            tests::{add_mock_device, MockAdapter},
+            Adapter,
+        },
+        plugin::{connect, Plugin},
+    };
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
+
+    async fn add_mock_adapter(
+        plugin: &mut Plugin,
+        adapter_id: &str,
+    ) -> Arc<Mutex<Box<dyn Adapter>>> {
+        let plugin_id = plugin.plugin_id.to_owned();
+        let adapter_id_copy = adapter_id.to_owned();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterAddedNotification(msg) => {
+                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_copy
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin
+            .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_create_adapter() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let mut plugin = connect(&plugin_id);
+        add_mock_adapter(&mut plugin, &adapter_id).await;
+        assert!(plugin.borrow_adapter(&adapter_id).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_remove_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let device_id_copy = device_id.clone();
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+
+        let message: Message = AdapterRemoveDeviceRequestMessageData {
+            device_id: device_id.clone(),
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.to_owned(),
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterRemoveDeviceResponse(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+
+        assert!(adapter
+            .lock()
+            .await
+            .adapter_handle_mut()
+            .get_device(&device_id_copy)
+            .is_none())
     }
 }

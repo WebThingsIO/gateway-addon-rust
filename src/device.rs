@@ -54,7 +54,7 @@ impl Downcast for dyn Device {}
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct DeviceHandle {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     pub(crate) weak: Weak<Mutex<Box<dyn Device>>>,
     /// Reference to the [adapter][crate::adapter::Adapter] which owns this device.
     pub adapter: Weak<Mutex<Box<dyn Adapter>>>,
@@ -69,7 +69,7 @@ pub struct DeviceHandle {
 
 impl DeviceHandle {
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         adapter: Weak<Mutex<Box<dyn Adapter>>>,
         plugin_id: String,
         adapter_id: String,
@@ -329,115 +329,57 @@ pub trait DeviceBuilder: Send + Sync + 'static {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::{
-        action::{Action, ActionHandle},
-        action_description::{ActionDescription, NoInput},
-        client::MockClient,
-        device::DeviceHandle,
+        action::tests::MockAction,
+        client::Client,
+        device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
-        event::Event,
-        event_description::EventDescription,
-        property::{Property, PropertyBuilder, PropertyHandle},
-        property_description::PropertyDescription,
+        event::tests::MockEvent,
+        property::tests::MockPropertyBuilder,
     };
-    use async_trait::async_trait;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
 
-    struct MockPropertyBuilder {
-        property_name: String,
+    pub struct MockDevice {
+        device_handle: DeviceHandle,
     }
 
-    impl MockPropertyBuilder {
-        pub fn new(property_name: String) -> Self {
-            Self { property_name }
-        }
-    }
-
-    impl PropertyBuilder for MockPropertyBuilder {
-        type Property = MockProperty;
-        type Value = i32;
-
-        fn name(&self) -> String {
-            self.property_name.to_owned()
-        }
-
-        fn description(&self) -> PropertyDescription<Self::Value> {
-            PropertyDescription::default()
-        }
-
-        fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
-            MockProperty::new(property_handle)
+    impl MockDevice {
+        pub fn new(device_handle: DeviceHandle) -> Self {
+            MockDevice { device_handle }
         }
     }
 
-    struct MockProperty {
-        property_handle: PropertyHandle<i32>,
-    }
-
-    impl MockProperty {
-        pub fn new(property_handle: PropertyHandle<i32>) -> Self {
-            MockProperty { property_handle }
+    impl Device for MockDevice {
+        fn device_handle_mut(&mut self) -> &mut DeviceHandle {
+            &mut self.device_handle
         }
     }
 
-    impl Property for MockProperty {
-        type Value = i32;
-        fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
-            &mut self.property_handle
+    pub struct MockDeviceBuilder {
+        device_id: String,
+    }
+
+    impl MockDeviceBuilder {
+        pub fn new(device_id: String) -> Self {
+            Self { device_id }
         }
     }
 
-    struct MockAction {
-        action_name: String,
-    }
+    impl DeviceBuilder for MockDeviceBuilder {
+        type Device = MockDevice;
 
-    impl MockAction {
-        pub fn new(action_name: String) -> Self {
-            Self { action_name }
-        }
-    }
-
-    #[async_trait]
-    impl Action for MockAction {
-        type Input = NoInput;
-
-        fn name(&self) -> String {
-            self.action_name.to_owned()
+        fn id(&self) -> String {
+            self.device_id.clone()
         }
 
-        fn description(&self) -> ActionDescription<Self::Input> {
-            ActionDescription::default()
+        fn description(&self) -> DeviceDescription {
+            DeviceDescription::default()
         }
 
-        async fn perform(
-            &mut self,
-            _action_handle: ActionHandle<Self::Input>,
-        ) -> Result<(), String> {
-            Ok(())
-        }
-    }
-
-    struct MockEvent {
-        event_name: String,
-    }
-
-    impl MockEvent {
-        pub fn new(event_name: String) -> Self {
-            Self { event_name }
-        }
-    }
-
-    impl Event for MockEvent {
-        type Data = u32;
-
-        fn name(&self) -> String {
-            self.event_name.clone()
-        }
-
-        fn description(&self) -> EventDescription<Self::Data> {
-            EventDescription::default()
+        fn build(self, device_handle: DeviceHandle) -> Self::Device {
+            MockDevice::new(device_handle)
         }
     }
 
@@ -447,7 +389,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let property_name = String::from("property_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 
@@ -471,7 +413,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let action_name = String::from("action_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 
@@ -495,7 +437,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let event_name = String::from("event_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
 
         let device_description = DeviceDescription::default();
 

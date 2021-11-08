@@ -8,18 +8,18 @@ use crate::{
     action::NoInput,
     actions,
     adapter::{Adapter, AdapterHandle},
-    api_error::ApiError,
     event_description::NoData,
-    events,
-    plugin::connect,
-    properties, Action, ActionDescription, ActionHandle, Actions, Device, DeviceBuilder,
+    events, properties, Action, ActionDescription, ActionHandle, Actions, Device, DeviceBuilder,
     DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
     PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use async_trait::async_trait;
 
-#[tokio::main]
 #[cfg(not(test))]
+use {crate::api_error::ApiError, crate::plugin::connect};
+
+#[cfg(not(test))]
+#[tokio::main]
 pub async fn main() -> Result<(), ApiError> {
     let mut plugin = connect("example-addon").await?;
     let adapter = plugin
@@ -50,6 +50,7 @@ impl ExampleAdapter {
         Self(adapter_handle)
     }
 
+    #[cfg(not(test))]
     async fn init(&mut self) -> Result<(), ApiError> {
         self.adapter_handle_mut()
             .add_device(ExampleDeviceBuilder::new())

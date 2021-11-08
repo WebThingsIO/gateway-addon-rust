@@ -7,7 +7,11 @@
 //! A module for everything related to WoT properties.
 
 pub use crate::property_description::*;
-use crate::{api_error::ApiError, client::Client, device::Device};
+use crate::{
+    api_error::ApiError,
+    client::{Client, ClientExt},
+    device::Device,
+};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -99,7 +103,7 @@ impl<T: Property> PropertyBase for T {
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct PropertyHandle<T: Value> {
-    client: Arc<Mutex<dyn Client>>,
+    client: Arc<Mutex<Client>>,
     /// Reference to the [device][crate::device::Device] which owns this property.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
@@ -112,7 +116,7 @@ pub struct PropertyHandle<T: Value> {
 
 impl<T: Value> PropertyHandle<T> {
     pub(crate) fn new(
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -226,7 +230,7 @@ pub trait PropertyBuilder: Send + Sync + 'static {
     #[allow(clippy::too_many_arguments)]
     fn build_(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -262,7 +266,7 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
     #[doc(hidden)]
     fn build(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -282,7 +286,7 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
     #[doc(hidden)]
     fn build(
         self: Box<Self>,
-        client: Arc<Mutex<dyn Client>>,
+        client: Arc<Mutex<Client>>,
         device: Weak<Mutex<Box<dyn Device>>>,
         plugin_id: String,
         adapter_id: String,
@@ -314,12 +318,60 @@ macro_rules! properties [
 ];
 
 #[cfg(test)]
-mod tests {
-    use crate::{client::MockClient, property::PropertyHandle, PropertyDescription};
+pub(crate) mod tests {
+    use crate::{
+        client::Client,
+        property::{Property, PropertyBuilder, PropertyHandle},
+        property_description::PropertyDescription,
+    };
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
+
+    pub struct MockPropertyBuilder {
+        property_name: String,
+    }
+
+    impl MockPropertyBuilder {
+        pub fn new(property_name: String) -> Self {
+            Self { property_name }
+        }
+    }
+
+    impl PropertyBuilder for MockPropertyBuilder {
+        type Property = MockProperty;
+        type Value = i32;
+
+        fn name(&self) -> String {
+            self.property_name.to_owned()
+        }
+
+        fn description(&self) -> PropertyDescription<Self::Value> {
+            PropertyDescription::default()
+        }
+
+        fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
+            MockProperty::new(property_handle)
+        }
+    }
+
+    pub struct MockProperty {
+        property_handle: PropertyHandle<i32>,
+    }
+
+    impl MockProperty {
+        pub fn new(property_handle: PropertyHandle<i32>) -> Self {
+            MockProperty { property_handle }
+        }
+    }
+
+    impl Property for MockProperty {
+        type Value = i32;
+        fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
+            &mut self.property_handle
+        }
+    }
 
     #[tokio::test]
     async fn test_set_value() {
@@ -327,7 +379,7 @@ mod tests {
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let property_name = String::from("property_name");
-        let client = Arc::new(Mutex::new(MockClient::new()));
+        let client = Arc::new(Mutex::new(Client::new()));
         let value = 42;
 
         let property_description = PropertyDescription::<i32>::default();
