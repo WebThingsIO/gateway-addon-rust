@@ -331,12 +331,14 @@ pub trait DeviceBuilder: Send + Sync + 'static {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        action::tests::MockAction,
+        action::{tests::MockAction, Actions, NoInput},
+        actions,
         client::Client,
         device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
-        event::tests::MockEvent,
-        property::tests::MockPropertyBuilder,
+        event::{tests::MockEvent, Events},
+        events, properties,
+        property::{tests::MockPropertyBuilder, Properties},
     };
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -378,6 +380,33 @@ pub(crate) mod tests {
             DeviceDescription::default()
         }
 
+        fn properties(&self) -> Properties {
+            properties![
+                MockPropertyBuilder::<bool>::new("property_bool".to_owned()),
+                MockPropertyBuilder::<u8>::new("property_u8".to_owned()),
+                MockPropertyBuilder::<i32>::new("property_i32".to_owned()),
+                MockPropertyBuilder::<f32>::new("property_f32".to_owned()),
+                MockPropertyBuilder::<Option<i32>>::new("property_opti32".to_owned()),
+                MockPropertyBuilder::<String>::new("property_string".to_owned())
+            ]
+        }
+
+        fn actions(&self) -> Actions {
+            actions![
+                MockAction::<NoInput>::new("action_noinput".to_owned()),
+                MockAction::<bool>::new("action_bool".to_owned()),
+                MockAction::<u8>::new("action_u8".to_owned()),
+                MockAction::<i32>::new("action_i32".to_owned()),
+                MockAction::<f32>::new("action_f32".to_owned()),
+                MockAction::<Option<i32>>::new("action_opti32".to_owned()),
+                MockAction::<String>::new("action_string".to_owned())
+            ]
+        }
+
+        fn events(&self) -> Events {
+            events![MockEvent::new("event_name".to_owned())]
+        }
+
         fn build(self, device_handle: DeviceHandle) -> Self::Device {
             MockDevice::new(device_handle)
         }
@@ -402,7 +431,9 @@ pub(crate) mod tests {
             device_description,
         );
 
-        device.add_property(Box::new(MockPropertyBuilder::new(property_name.clone())));
+        device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
+            property_name.clone(),
+        )));
 
         assert!(device.get_property(&property_name).is_some())
     }
@@ -426,7 +457,7 @@ pub(crate) mod tests {
             device_description,
         );
 
-        device.add_action(Box::new(MockAction::new(action_name.to_owned())));
+        device.add_action(Box::new(MockAction::<NoInput>::new(action_name.to_owned())));
 
         assert!(device.get_action(&action_name).is_some())
     }

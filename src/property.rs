@@ -321,27 +321,36 @@ macro_rules! properties [
 pub(crate) mod tests {
     use crate::{
         client::Client,
-        property::{Property, PropertyBuilder, PropertyHandle},
+        property::{self, Property, PropertyBuilder, PropertyHandle},
         property_description::PropertyDescription,
     };
+    use async_trait::async_trait;
+    use mockall::mock;
     use serde_json::json;
-    use std::sync::{Arc, Weak};
+    use std::{
+        marker::PhantomData,
+        sync::{Arc, Weak},
+    };
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
 
-    pub struct MockPropertyBuilder {
+    pub struct MockPropertyBuilder<T: property::Value> {
         property_name: String,
+        _value: PhantomData<T>,
     }
 
-    impl MockPropertyBuilder {
+    impl<T: property::Value> MockPropertyBuilder<T> {
         pub fn new(property_name: String) -> Self {
-            Self { property_name }
+            Self {
+                property_name,
+                _value: PhantomData,
+            }
         }
     }
 
-    impl PropertyBuilder for MockPropertyBuilder {
-        type Property = MockProperty;
-        type Value = i32;
+    impl<T: property::Value> PropertyBuilder for MockPropertyBuilder<T> {
+        type Property = MockProperty<T>;
+        type Value = T;
 
         fn name(&self) -> String {
             self.property_name.to_owned()
@@ -356,20 +365,34 @@ pub(crate) mod tests {
         }
     }
 
-    pub struct MockProperty {
-        property_handle: PropertyHandle<i32>,
-    }
-
-    impl MockProperty {
-        pub fn new(property_handle: PropertyHandle<i32>) -> Self {
-            MockProperty { property_handle }
+    mock! {
+        pub PropertyHelper<T> {
+            pub fn on_update(&self, value: T) -> Result<(), String>;
         }
     }
 
-    impl Property for MockProperty {
-        type Value = i32;
-        fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
+    pub struct MockProperty<T: property::Value> {
+        property_handle: PropertyHandle<T>,
+        pub property_helper: MockPropertyHelper<T>,
+    }
+
+    impl<T: property::Value> MockProperty<T> {
+        pub fn new(property_handle: PropertyHandle<T>) -> Self {
+            MockProperty {
+                property_handle,
+                property_helper: MockPropertyHelper::new(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl<T: property::Value> Property for MockProperty<T> {
+        type Value = T;
+        fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value> {
             &mut self.property_handle
+        }
+        async fn on_update(&mut self, value: Self::Value) -> Result<(), String> {
+            self.property_helper.on_update(value)
         }
     }
 
