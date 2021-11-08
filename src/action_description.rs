@@ -150,7 +150,7 @@ impl<T: SimpleInput> Input for T {
 }
 
 /// A struct which can be used as [input][Input] for actions which do not expect any input.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NoInput;
 
 impl Input for NoInput {
@@ -292,7 +292,19 @@ impl<T: Input> Input for Vec<T> {
 
 impl<T: Input> Input for Option<T> {
     fn input() -> Option<serde_json::Value> {
-        T::input()
+        T::input().map(|mut input| {
+            if let serde_json::Value::Object(ref mut map) = input {
+                if let Some(type_) = map.get_mut("type") {
+                    if let serde_json::Value::Array(ref mut array) = type_ {
+                        array.push(json!("null"));
+                    } else {
+                        *type_ = json!([type_, "null"]);
+                    }
+                    *type_ = json!(type_)
+                }
+            }
+            input
+        })
     }
 
     fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {

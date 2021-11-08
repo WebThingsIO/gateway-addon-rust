@@ -288,29 +288,40 @@ macro_rules! actions [
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        action::{Action, ActionHandle},
+        action::{Action, ActionHandle, Input},
         action_description::{ActionDescription, NoInput},
         client::Client,
     };
     use async_trait::async_trait;
+    use mockall::mock;
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
 
-    pub struct MockAction {
-        action_name: String,
+    mock! {
+        pub ActionHelper<T: Input> {
+            pub fn perform(&mut self, action_handle: ActionHandle<T>) -> Result<(), String>;
+        }
     }
 
-    impl MockAction {
+    pub struct MockAction<T: Input> {
+        action_name: String,
+        pub action_helper: MockActionHelper<T>,
+    }
+
+    impl<T: Input> MockAction<T> {
         pub fn new(action_name: String) -> Self {
-            Self { action_name }
+            Self {
+                action_name,
+                action_helper: MockActionHelper::new(),
+            }
         }
     }
 
     #[async_trait]
-    impl Action for MockAction {
-        type Input = NoInput;
+    impl<T: Input> Action for MockAction<T> {
+        type Input = T;
 
         fn name(&self) -> String {
             self.action_name.to_owned()
@@ -322,9 +333,9 @@ pub(crate) mod tests {
 
         async fn perform(
             &mut self,
-            _action_handle: ActionHandle<Self::Input>,
+            action_handle: ActionHandle<Self::Input>,
         ) -> Result<(), String> {
-            Ok(())
+            self.action_helper.perform(action_handle)
         }
     }
 

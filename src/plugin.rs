@@ -511,15 +511,21 @@ impl Plugin {
 #[cfg(test)]
 mod tests {
     use crate::{
+        action::{tests::MockAction, Input, NoInput},
         adapter::{
             tests::{add_mock_device, MockAdapter},
             Adapter,
         },
         plugin::{connect, Plugin},
+        property::{self, tests::MockProperty},
     };
+    use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{AdapterRemoveDeviceRequestMessageData, Message};
+    use webthings_gateway_ipc_types::{
+        AdapterRemoveDeviceRequestMessageData, DeviceRequestActionRequestMessageData,
+        DeviceSetPropertyCommandMessageData, Message,
+    };
 
     async fn add_mock_adapter(
         plugin: &mut Plugin,
@@ -598,5 +604,219 @@ mod tests {
             .adapter_handle_mut()
             .get_device(&device_id_copy)
             .is_none())
+    }
+
+    async fn test_request_action_perform<T: Input + PartialEq>(
+        action_name: String,
+        action_input: serde_json::Value,
+        expected_input: T,
+    ) {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let action_id = String::from("action_id");
+
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+
+        {
+            let mut device = device.lock().await;
+            let action = device.device_handle_mut().get_action(&action_name).unwrap();
+            let mut action = action.lock().await;
+            let action = action.as_any_mut().downcast_mut::<MockAction<T>>().unwrap();
+            action
+                .action_helper
+                .expect_perform()
+                .withf(move |action_handle| action_handle.input == expected_input)
+                .times(1)
+                .returning(|_| Ok(()));
+        }
+
+        let message: Message = DeviceRequestActionRequestMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+            device_id: device_id.clone(),
+            action_name: action_name.clone(),
+            action_id: action_id.clone(),
+            input: action_input,
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DeviceRequestActionResponse(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                        && msg.data.action_name == action_name
+                        && msg.data.action_id == action_id
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_action_noinput_perform() {
+        test_request_action_perform(String::from("action_noinput"), json!(null), NoInput).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_bool_perform() {
+        test_request_action_perform(String::from("action_bool"), json!(true), true).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_u8_perform() {
+        test_request_action_perform(String::from("action_u8"), json!(112_u8), 112_u8).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_i32_perform() {
+        test_request_action_perform(String::from("action_i32"), json!(21), 21).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_f32_perform() {
+        test_request_action_perform(String::from("action_f32"), json!(-2.7_f32), -2.7_f32).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_opti32_perform() {
+        test_request_action_perform(String::from("action_opti32"), json!(11), Some(11)).await;
+        test_request_action_perform::<Option<i32>>(
+            String::from("action_opti32"),
+            json!(null),
+            None,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_request_action_string_perform() {
+        test_request_action_perform(
+            String::from("action_string"),
+            json!("foo"),
+            "foo".to_owned(),
+        )
+        .await;
+    }
+
+    async fn test_request_property_update_value<T: property::Value + PartialEq>(
+        property_name: String,
+        property_value: serde_json::Value,
+        expected_value: T,
+    ) {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+
+        {
+            let expected_value = expected_value.clone();
+            let mut device = device.lock().await;
+            let property = device
+                .device_handle_mut()
+                .get_property(&property_name)
+                .unwrap();
+            let mut property = property.lock().await;
+            let property = property
+                .as_any_mut()
+                .downcast_mut::<MockProperty<T>>()
+                .unwrap();
+            property
+                .property_helper
+                .expect_on_update()
+                .withf(move |value| value == &expected_value)
+                .times(1)
+                .returning(|_| Ok(()));
+        }
+
+        let serialized_value = property::Value::serialize(expected_value.clone()).unwrap();
+
+        let message: Message = DeviceSetPropertyCommandMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+            device_id: device_id.clone(),
+            property_name: property_name.clone(),
+            property_value,
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DevicePropertyChangedNotification(msg) => {
+                    println!("asdf {:?} {:?}", msg.data.property.value, serialized_value);
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id
+                        && msg.data.property.name == Some(property_name.to_owned())
+                        && msg.data.property.value == serialized_value
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_property_bool_update_value() {
+        test_request_property_update_value(String::from("property_bool"), json!(true), true).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_property_u8_update_value() {
+        test_request_property_update_value(String::from("property_u8"), json!(112_u8), 112_u8)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_request_property_i32_update_value() {
+        test_request_property_update_value(String::from("property_i32"), json!(21), 21).await;
+    }
+
+    #[tokio::test]
+    async fn test_request_property_f32_update_value() {
+        test_request_property_update_value(String::from("property_f32"), json!(-2.7_f32), -2.7_f32)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_request_property_opti32_update_value() {
+        test_request_property_update_value(String::from("property_opti32"), json!(21), Some(21))
+            .await;
+        test_request_property_update_value::<Option<i32>>(
+            String::from("property_opti32"),
+            json!(null),
+            None,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_request_property_string_update_value() {
+        test_request_property_update_value(
+            String::from("property_string"),
+            json!("foo"),
+            "foo".to_owned(),
+        )
+        .await;
     }
 }

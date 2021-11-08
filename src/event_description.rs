@@ -127,7 +127,7 @@ impl<T: SimpleData> Data for T {
 }
 
 /// A struct which can be used as [data][Data] for events which do not expect any data.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, PartialEq, Debug)]
 pub struct NoData;
 
 impl Data for NoData {
