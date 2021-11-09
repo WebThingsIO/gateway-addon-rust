@@ -8,7 +8,7 @@
 
 use crate::{
     api_error::ApiError,
-    client::{Client, ClientExt},
+    client::Client,
     device::{self, Device, DeviceBuilder},
 };
 use as_any::{AsAny, Downcast};
