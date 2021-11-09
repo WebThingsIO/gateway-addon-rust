@@ -229,7 +229,9 @@ impl AdapterHandle {
         &mut self,
         device_id: S,
     ) -> Result<(), String> {
-        self.devices.remove(&device_id.clone().into());
+        if self.devices.remove(&device_id.clone().into()).is_none() {
+            return Err("Unknown device".to_owned());
+        }
 
         let message: Message = AdapterRemoveDeviceResponseMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -315,6 +317,62 @@ pub(crate) mod tests {
         add_mock_device(&mut adapter, &device_id).await;
 
         assert!(adapter.get_device(&device_id).is_some())
+    }
+
+    #[tokio::test]
+    async fn test_get_unknown_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let adapter = AdapterHandle::new(client.clone(), plugin_id, adapter_id);
+
+        assert!(adapter.get_device(&device_id).is_none())
+    }
+
+    #[tokio::test]
+    async fn test_remove_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let device_id_copy = device_id.clone();
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+
+        add_mock_device(&mut adapter, &device_id).await;
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterRemoveDeviceResponse(msg) => {
+                    msg.data.plugin_id == plugin_id
+                        && msg.data.adapter_id == adapter_id
+                        && msg.data.device_id == device_id_copy
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        adapter.remove_device(device_id.clone()).await.unwrap();
+
+        assert!(adapter.get_device(&device_id).is_none())
+    }
+
+    #[tokio::test]
+    async fn test_remove_unknown_device() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+
+        assert!(adapter.remove_device(device_id).await.is_err())
     }
 
     #[tokio::test]
