@@ -27,7 +27,7 @@ use webthings_gateway_ipc_types::{
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
 #[cfg(not(test))]
-mod plugin {
+mod double {
     use super::*;
     use futures::stream::SplitStream;
     use std::str::FromStr;
@@ -105,7 +105,7 @@ mod plugin {
 }
 
 #[cfg(test)]
-mod plugin_test {
+mod mock_double {
     use super::*;
     use webthings_gateway_ipc_types::Units;
 
@@ -144,9 +144,9 @@ mod plugin_test {
 }
 
 #[cfg(not(test))]
-pub use plugin::*;
+pub use double::*;
 #[cfg(test)]
-pub use plugin_test::*;
+pub use mock_double::*;
 
 /// A struct which represents a successfully established connection to a WebthingsIO gateway.
 ///
