@@ -13,6 +13,7 @@ use crate::{
     database::Database,
 };
 use futures::prelude::*;
+use mockall_double::double;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
@@ -26,127 +27,132 @@ use webthings_gateway_ipc_types::{
 
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
-#[cfg(not(test))]
 mod double {
-    use super::*;
-    use futures::stream::SplitStream;
-    use std::str::FromStr;
-    use tokio::net::TcpStream;
-    use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-    use url::Url;
-    use webthings_gateway_ipc_types::{
-        PluginRegisterRequestMessageData, PluginRegisterResponseMessageData,
-    };
+    #[cfg(not(test))]
+    pub mod plugin {
+        use crate::{api_error::ApiError, client::Client, plugin::Plugin};
+        use futures::stream::{SplitStream, StreamExt};
+        use std::{collections::HashMap, str::FromStr, sync::Arc};
+        use tokio::{net::TcpStream, sync::Mutex};
+        use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+        use url::Url;
+        use webthings_gateway_ipc_types::{
+            Message as IPCMessage, PluginRegisterRequestMessageData,
+            PluginRegisterResponseMessageData,
+        };
 
-    pub(crate) type PluginStream = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-    const GATEWAY_URL: &str = "ws://localhost:9500";
+        pub(crate) type PluginStream = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+        const GATEWAY_URL: &str = "ws://localhost:9500";
 
-    /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
-    pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
-        let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
+        /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
+        pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
+            let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
 
-        let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
+            let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
 
-        let (sink, mut stream) = socket.split();
-        let mut client = Client::new(sink);
+            let (sink, mut stream) = socket.split();
+            let mut client = Client::new(sink);
 
-        let message: IPCMessage = PluginRegisterRequestMessageData {
-            plugin_id: plugin_id.to_owned(),
+            let message: IPCMessage = PluginRegisterRequestMessageData {
+                plugin_id: plugin_id.to_owned(),
+            }
+            .into();
+
+            client.send_message(&message).await?;
+
+            let PluginRegisterResponseMessageData {
+                gateway_version: _,
+                plugin_id: _,
+                preferences,
+                user_profile,
+            } = loop {
+                match read(&mut stream).await {
+                    None => {}
+                    Some(result) => match result {
+                        Ok(IPCMessage::PluginRegisterResponse(msg)) => {
+                            break msg.data;
+                        }
+                        Ok(msg) => {
+                            log::warn!("Received unexpected message {:?}", msg);
+                        }
+                        Err(err) => log::error!("Could not read message: {}", err),
+                    },
+                }
+            };
+
+            Ok(Plugin {
+                plugin_id: plugin_id.to_owned(),
+                preferences,
+                user_profile,
+                client: Arc::new(Mutex::new(client)),
+                stream,
+                adapters: HashMap::new(),
+            })
         }
-        .into();
 
-        client.send_message(&message).await?;
+        pub(crate) async fn read(stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
+            stream.next().await.map(|result| match result {
+                Ok(msg) => {
+                    let json = msg
+                        .to_text()
+                        .map_err(|err| format!("Could not get text message: {:?}", err))?;
 
-        let PluginRegisterResponseMessageData {
-            gateway_version: _,
-            plugin_id: _,
-            preferences,
-            user_profile,
-        } = loop {
-            match read(&mut stream).await {
-                None => {}
-                Some(result) => match result {
-                    Ok(IPCMessage::PluginRegisterResponse(msg)) => {
-                        break msg.data;
-                    }
-                    Ok(msg) => {
-                        log::warn!("Received unexpected message {:?}", msg);
-                    }
-                    Err(err) => log::error!("Could not read message: {}", err),
+                    log::trace!("Received message {}", json);
+
+                    IPCMessage::from_str(json)
+                        .map_err(|err| format!("Could not parse message: {:?}", err))
+                }
+                Err(err) => Err(err.to_string()),
+            })
+        }
+    }
+
+    #[cfg(test)]
+    pub mod mock_plugin {
+        use crate::{client::Client, plugin::Plugin};
+        use std::{collections::HashMap, sync::Arc};
+        use tokio::sync::Mutex;
+        use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
+
+        pub(crate) type PluginStream = ();
+
+        pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
+            let preferences = Preferences {
+                language: "en-US".to_owned(),
+                units: Units {
+                    temperature: "degree celsius".to_owned(),
                 },
+            };
+            let user_profile = UserProfile {
+                addons_dir: "".to_owned(),
+                base_dir: "".to_owned(),
+                config_dir: "".to_owned(),
+                data_dir: "".to_owned(),
+                gateway_dir: "".to_owned(),
+                log_dir: "".to_owned(),
+                media_dir: "".to_owned(),
+            };
+            let client = Arc::new(Mutex::new(Client::new()));
+            Plugin {
+                plugin_id: plugin_id.into(),
+                preferences,
+                user_profile,
+                client: client.clone(),
+                stream: (),
+                adapters: HashMap::new(),
             }
-        };
+        }
 
-        Ok(Plugin {
-            plugin_id: plugin_id.to_owned(),
-            preferences,
-            user_profile,
-            client: Arc::new(Mutex::new(client)),
-            stream,
-            adapters: HashMap::new(),
-        })
-    }
-
-    pub(crate) async fn read(stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
-        stream.next().await.map(|result| match result {
-            Ok(msg) => {
-                let json = msg
-                    .to_text()
-                    .map_err(|err| format!("Could not get text message: {:?}", err))?;
-
-                log::trace!("Received message {}", json);
-
-                IPCMessage::from_str(json)
-                    .map_err(|err| format!("Could not parse message: {:?}", err))
-            }
-            Err(err) => Err(err.to_string()),
-        })
-    }
-}
-
-#[cfg(test)]
-mod mock_double {
-    use super::*;
-    use webthings_gateway_ipc_types::Units;
-
-    pub(crate) type PluginStream = ();
-
-    pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
-        let preferences = Preferences {
-            language: "en-US".to_owned(),
-            units: Units {
-                temperature: "degree celsius".to_owned(),
-            },
-        };
-        let user_profile = UserProfile {
-            addons_dir: "".to_owned(),
-            base_dir: "".to_owned(),
-            config_dir: "".to_owned(),
-            data_dir: "".to_owned(),
-            gateway_dir: "".to_owned(),
-            log_dir: "".to_owned(),
-            media_dir: "".to_owned(),
-        };
-        let client = Arc::new(Mutex::new(Client::new()));
-        Plugin {
-            plugin_id: plugin_id.into(),
-            preferences,
-            user_profile,
-            client: client.clone(),
-            stream: (),
-            adapters: HashMap::new(),
+        pub(crate) async fn read(_stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
+            None
         }
     }
-
-    pub(crate) async fn read(_stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
-        None
-    }
 }
 
-#[cfg(not(test))]
-pub use double::*;
-#[cfg(test)]
-pub use mock_double::*;
+#[double]
+use double::plugin;
+
+pub use plugin::*;
 
 /// A struct which represents a successfully established connection to a WebthingsIO gateway.
 ///
