@@ -7,11 +7,7 @@
 //! A module for everything related to WoT actions.
 
 pub use crate::action_description::*;
-use crate::{
-    api_error::ApiError,
-    client::{Client, ClientExt},
-    device::Device,
-};
+use crate::{api_error::ApiError, client::Client, device::Device};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};

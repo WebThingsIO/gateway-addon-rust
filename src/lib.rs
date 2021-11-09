@@ -12,12 +12,14 @@ pub mod action;
 mod action_description;
 pub mod adapter;
 pub mod api_error;
-pub(crate) mod client;
+#[doc(hidden)]
+pub mod client;
 pub mod database;
 pub mod device;
 mod device_description;
 pub mod event;
 mod event_description;
+#[cfg(not(test))]
 #[doc(hidden)]
 pub mod example;
 pub mod plugin;
