@@ -16,8 +16,8 @@ use crate::{
     DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
     PropertyBuilder, PropertyDescription, PropertyHandle,
 };
-use async_trait::async_trait;
 use as_any::Downcast;
+use async_trait::async_trait;
 
 #[tokio::main]
 pub async fn main() -> Result<(), ApiError> {
