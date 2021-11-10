@@ -17,6 +17,7 @@ use crate::{
     PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use async_trait::async_trait;
+use as_any::Downcast;
 
 #[tokio::main]
 pub async fn main() -> Result<(), ApiError> {
@@ -27,7 +28,6 @@ pub async fn main() -> Result<(), ApiError> {
     adapter
         .lock()
         .await
-        .as_any_mut()
         .downcast_mut::<ExampleAdapter>()
         .unwrap()
         .init()
