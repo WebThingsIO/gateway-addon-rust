@@ -424,3 +424,87 @@ impl<T: Input> ActionDescription<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::action_description::Input;
+    use serde_json::json;
+
+    #[test]
+    fn test_deserialize_bool() {
+        assert_eq!(bool::deserialize(json!(true)).unwrap(), true);
+        assert_eq!(bool::deserialize(json!(false)).unwrap(), false);
+        assert!(bool::deserialize(json!(null)).is_err());
+        assert!(bool::deserialize(json!(21)).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_u8() {
+        assert_eq!(u8::deserialize(json!(42)).unwrap(), 42);
+        assert!(u8::deserialize(json!(null)).is_err());
+        assert!(u8::deserialize(json!(312)).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_i32() {
+        assert_eq!(i32::deserialize(json!(42)).unwrap(), 42);
+        assert!(i32::deserialize(json!(null)).is_err());
+        assert!(i32::deserialize(json!(3.5_f32)).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_f32() {
+        assert_eq!(f32::deserialize(json!(4.2)).unwrap(), 4.2);
+        assert!(f32::deserialize(json!(null)).is_err());
+        assert!(f32::deserialize(json!("foo")).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_opti32() {
+        assert_eq!(Option::<i32>::deserialize(json!(42)).unwrap(), Some(42));
+        assert_eq!(Option::<i32>::deserialize(json!(null)).unwrap(), None);
+        assert!(Option::<i32>::deserialize(json!("foo")).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_veci32() {
+        assert_eq!(
+            Vec::<i32>::deserialize(json!([])).unwrap(),
+            Vec::<i32>::new().to_owned()
+        );
+        assert_eq!(
+            Vec::<i32>::deserialize(json!([21, 42])).unwrap(),
+            vec![21, 42]
+        );
+        assert!(Vec::<i32>::deserialize(json!(null)).is_err());
+        assert!(Vec::<i32>::deserialize(json!(42)).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_string() {
+        assert_eq!(String::deserialize(json!("")).unwrap(), "".to_owned());
+        assert_eq!(String::deserialize(json!("foo")).unwrap(), "foo".to_owned());
+        assert!(String::deserialize(json!(null)).is_err());
+        assert!(String::deserialize(json!(42)).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_jsonvalue() {
+        assert_eq!(
+            serde_json::Value::deserialize(json!(true)).unwrap(),
+            json!(true).to_owned()
+        );
+        assert_eq!(
+            serde_json::Value::deserialize(json!(42)).unwrap(),
+            json!(42).to_owned()
+        );
+        assert_eq!(
+            serde_json::Value::deserialize(json!("foo")).unwrap(),
+            json!("foo").to_owned()
+        );
+        assert_eq!(
+            serde_json::Value::deserialize(json!(null)).unwrap(),
+            json!(null)
+        );
+    }
+}
