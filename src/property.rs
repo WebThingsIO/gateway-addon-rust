@@ -322,7 +322,6 @@ pub(crate) mod tests {
     };
     use async_trait::async_trait;
     use mockall::mock;
-    use serde_json::json;
     use std::{
         marker::PhantomData,
         sync::{Arc, Weak},
@@ -392,16 +391,14 @@ pub(crate) mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_set_value() {
+    async fn test_set_value<T: property::Value + PartialEq>(value: T) {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let property_name = String::from("property_name");
         let client = Arc::new(Mutex::new(Client::new()));
-        let value = 42;
 
-        let property_description = PropertyDescription::<i32>::default();
+        let property_description = PropertyDescription::<T>::default();
 
         let mut property = PropertyHandle::new(
             client.clone(),
@@ -413,7 +410,7 @@ pub(crate) mod tests {
             property_description,
         );
 
-        let expected_value = Some(json!(value.clone()));
+        let expected_value = property::Value::serialize(value.clone()).unwrap();
 
         client
             .lock()
@@ -432,8 +429,39 @@ pub(crate) mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        property.set_value(value).await.unwrap();
+        property.set_value(value.clone()).await.unwrap();
 
-        assert!(property.description.value == 42);
+        assert!(property.description.value == value);
+    }
+
+    #[tokio::test]
+    async fn test_set_value_bool() {
+        test_set_value(true).await;
+    }
+
+    #[tokio::test]
+    async fn test_set_value_u8() {
+        test_set_value(142_u8).await;
+    }
+
+    #[tokio::test]
+    async fn test_set_value_i32() {
+        test_set_value(42).await;
+    }
+
+    #[tokio::test]
+    async fn test_set_value_f32() {
+        test_set_value(0.42_f32).await;
+    }
+
+    #[tokio::test]
+    async fn test_set_value_opti32() {
+        test_set_value(Some(42)).await;
+        test_set_value::<Option<i32>>(None).await;
+    }
+
+    #[tokio::test]
+    async fn test_set_value_string() {
+        test_set_value("foo".to_owned()).await;
     }
 }
