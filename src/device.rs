@@ -406,7 +406,7 @@ pub(crate) mod tests {
         }
 
         fn events(&self) -> Events {
-            events![MockEvent::<NoData>::new("event_name".to_owned())]
+            events![MockEvent::<NoData>::new("event_nodata".to_owned())]
         }
 
         fn build(self, device_handle: DeviceHandle) -> Self::Device {
