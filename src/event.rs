@@ -252,25 +252,32 @@ pub(crate) mod tests {
     use crate::{
         client::Client,
         event::{Event, EventHandle},
-        event_description::EventDescription,
+        event_description::{Data, EventDescription},
     };
     use serde_json::json;
-    use std::sync::{Arc, Weak};
+    use std::{
+        marker::PhantomData,
+        sync::{Arc, Weak},
+    };
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::Message;
 
-    pub struct MockEvent {
+    pub struct MockEvent<T: Data> {
         event_name: String,
+        _data: PhantomData<T>,
     }
 
-    impl MockEvent {
+    impl<T: Data> MockEvent<T> {
         pub fn new(event_name: String) -> Self {
-            Self { event_name }
+            Self {
+                event_name,
+                _data: PhantomData,
+            }
         }
     }
 
-    impl Event for MockEvent {
-        type Data = u32;
+    impl<T: Data> Event for MockEvent<T> {
+        type Data = T;
 
         fn name(&self) -> String {
             self.event_name.clone()
@@ -288,11 +295,11 @@ pub(crate) mod tests {
         let device_id = String::from("device_id");
         let event_name = String::from("event_name");
         let client = Arc::new(Mutex::new(Client::new()));
-        let data = json!(42);
+        let data = 42_u32;
 
         let event_description = EventDescription::default();
 
-        let event = EventHandle::new(
+        let event = EventHandle::<u32>::new(
             client.clone(),
             Weak::new(),
             plugin_id.clone(),
@@ -302,7 +309,7 @@ pub(crate) mod tests {
             event_description,
         );
 
-        let expected_data = Some(data.clone());
+        let expected_data = Some(json!(data.clone()));
 
         client
             .lock()
