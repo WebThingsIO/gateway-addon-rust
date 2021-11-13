@@ -535,6 +535,7 @@ mod tests {
         plugin::{connect, Plugin},
         property::{self, tests::MockProperty},
     };
+    use as_any::Downcast;
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -747,10 +748,7 @@ mod tests {
                 .get_property(&property_name)
                 .unwrap();
             let mut property = property.lock().await;
-            let property = property
-                .as_any_mut()
-                .downcast_mut::<MockProperty<T>>()
-                .unwrap();
+            let property = property.downcast_mut::<MockProperty<T>>().unwrap();
             property
                 .property_helper
                 .expect_on_update()

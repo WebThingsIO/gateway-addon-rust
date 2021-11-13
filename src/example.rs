@@ -16,6 +16,7 @@ use crate::{
     DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
     PropertyBuilder, PropertyDescription, PropertyHandle,
 };
+use as_any::Downcast;
 use async_trait::async_trait;
 
 #[tokio::main]
@@ -27,7 +28,6 @@ pub async fn main() -> Result<(), ApiError> {
     adapter
         .lock()
         .await
-        .as_any_mut()
         .downcast_mut::<ExampleAdapter>()
         .unwrap()
         .init()

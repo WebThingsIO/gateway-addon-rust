@@ -33,6 +33,7 @@ use webthings_gateway_ipc_types::{
 /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
+/// # use as_any::Downcast;
 /// struct ExampleAdapter(AdapterHandle);
 ///
 /// #[async_trait]
@@ -69,7 +70,6 @@ use webthings_gateway_ipc_types::{
 ///     adapter
 ///         .lock()
 ///         .await
-///         .as_any_mut()
 ///         .downcast_mut::<ExampleAdapter>()
 ///         .unwrap()
 ///         .init()
