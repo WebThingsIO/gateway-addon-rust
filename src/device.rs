@@ -114,7 +114,7 @@ impl DeviceHandle {
         self.properties.get(name).cloned()
     }
 
-    /// Set the value of a [property][crate::property::Property] which this device owns by ID.
+    /// Helper method for setting the value of a [property][crate::property::Property] which this device owns by ID.
     ///
     /// Make sure that the type of the provided value is compatible with the respective property.
     pub async fn set_property_value(
@@ -203,7 +203,7 @@ impl DeviceHandle {
         self.events.get(name).cloned()
     }
 
-    /// Raise an [event][crate::event::Event] which this device owns by ID.
+    /// Helper method for raising an [event][crate::event::Event] which this device owns by ID.
     ///
     /// Make sure that the type of the provided data is compatible with the respective event.
     pub async fn raise_event(
@@ -337,9 +337,11 @@ pub(crate) mod tests {
         device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
         event::{tests::MockEvent, Events},
+        event_description::NoData,
         events, properties,
         property::{tests::MockPropertyBuilder, Properties},
     };
+    use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
 
@@ -404,7 +406,7 @@ pub(crate) mod tests {
         }
 
         fn events(&self) -> Events {
-            events![MockEvent::new("event_name".to_owned())]
+            events![MockEvent::<NoData>::new("event_nodata".to_owned())]
         }
 
         fn build(self, device_handle: DeviceHandle) -> Self::Device {
@@ -413,7 +415,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_add_property() {
+    fn test_get_property() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
@@ -439,7 +441,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_add_action() {
+    fn test_get_unknown_property() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let property_name = String::from("property_name");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_id,
+            device_description,
+        );
+
+        assert!(device.get_property(&property_name).is_none())
+    }
+
+    #[test]
+    fn test_get_action() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
@@ -463,7 +487,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_add_event() {
+    fn test_get_unknown_action() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let action_name = String::from("action_name");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_id,
+            device_description,
+        );
+
+        assert!(device.get_action(&action_name).is_none())
+    }
+
+    #[test]
+    fn test_get_event() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
@@ -481,8 +527,144 @@ pub(crate) mod tests {
             device_description,
         );
 
-        device.add_event(Box::new(MockEvent::new(event_name.to_owned())));
+        device.add_event(Box::new(MockEvent::<NoData>::new(event_name.to_owned())));
 
         assert!(device.get_event(&event_name).is_some())
+    }
+
+    #[test]
+    fn test_get_unknown_event() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let event_name = String::from("event_name");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let device = DeviceHandle::new(
+            client,
+            Weak::new(),
+            plugin_id,
+            adapter_id,
+            device_id,
+            device_description,
+        );
+
+        assert!(device.get_event(&event_name).is_none())
+    }
+
+    #[tokio::test]
+    async fn test_set_property_value() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let property_name = String::from("property_name");
+        let value = 42;
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let mut device = DeviceHandle::new(
+            client.clone(),
+            Weak::new(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            device_description,
+        );
+
+        device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
+            property_name.clone(),
+        )));
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .returning(|_| Ok(()));
+
+        assert!(device
+            .set_property_value(&property_name, Some(json!(value)))
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_unknown_property_value() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let property_name = String::from("property_name");
+        let value = 42;
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let device = DeviceHandle::new(
+            client.clone(),
+            Weak::new(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            device_description,
+        );
+
+        assert!(device
+            .set_property_value(&property_name, Some(json!(value)))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_raise_event() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let event_name = String::from("event_name");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let mut device = DeviceHandle::new(
+            client.clone(),
+            Weak::new(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            device_description,
+        );
+
+        device.add_event(Box::new(MockEvent::<NoData>::new(event_name.clone())));
+
+        client
+            .lock()
+            .await
+            .expect_send_message()
+            .returning(|_| Ok(()));
+
+        assert!(device.raise_event(&event_name, None).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_raise_unknown_event() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let event_name = String::from("event_name");
+        let client = Arc::new(Mutex::new(Client::new()));
+
+        let device_description = DeviceDescription::default();
+
+        let device = DeviceHandle::new(
+            client.clone(),
+            Weak::new(),
+            plugin_id.clone(),
+            adapter_id.clone(),
+            device_id.clone(),
+            device_description,
+        );
+
+        assert!(device.raise_event(&event_name, None).await.is_err());
     }
 }

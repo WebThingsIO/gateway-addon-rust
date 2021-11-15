@@ -433,5 +433,7 @@ pub(crate) mod tests {
             .returning(|_| Ok(()));
 
         property.set_value(value).await.unwrap();
+
+        assert!(property.description.value == 42);
     }
 }
