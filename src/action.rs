@@ -69,7 +69,7 @@ pub trait Action: Send + Sync + 'static {
     ///
     /// If action execution may take a while, don't block this function.
     ///
-    /// Don't forget to call `action_handle.start()` and `action_handle.stop()`.
+    /// Don't forget to call `action_handle.start()` and `action_handle.finish()`.
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String>;
 
     #[doc(hidden)]
