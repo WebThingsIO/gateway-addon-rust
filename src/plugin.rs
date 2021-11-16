@@ -549,7 +549,7 @@ mod tests {
         adapter_id: &str,
     ) -> Arc<Mutex<Box<dyn Adapter>>> {
         let plugin_id = plugin.plugin_id.to_owned();
-        let adapter_id_copy = adapter_id.to_owned();
+        let adapter_id_clone = adapter_id.to_owned();
 
         plugin
             .client
@@ -558,7 +558,7 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterAddedNotification(msg) => {
-                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_copy
+                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_clone
                 }
                 _ => false,
             })
@@ -585,7 +585,7 @@ mod tests {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
-        let device_id_copy = device_id.clone();
+        let device_id_clone = device_id.clone();
         let mut plugin = connect(&plugin_id);
         let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
         add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
@@ -619,7 +619,7 @@ mod tests {
             .lock()
             .await
             .adapter_handle_mut()
-            .get_device(&device_id_copy)
+            .get_device(&device_id_clone)
             .is_none())
     }
 
