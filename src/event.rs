@@ -252,9 +252,8 @@ pub(crate) mod tests {
     use crate::{
         client::Client,
         event::{Event, EventHandle},
-        event_description::{Data, EventDescription},
+        event_description::{Data, EventDescription, NoData},
     };
-    use serde_json::json;
     use std::{
         marker::PhantomData,
         sync::{Arc, Weak},
@@ -288,18 +287,16 @@ pub(crate) mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_raise_event() {
+    async fn test_raise_event<T: Data + PartialEq>(data: T) {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
         let event_name = String::from("event_name");
         let client = Arc::new(Mutex::new(Client::new()));
-        let data = 42_u32;
 
         let event_description = EventDescription::default();
 
-        let event = EventHandle::<u32>::new(
+        let event = EventHandle::<T>::new(
             client.clone(),
             Weak::new(),
             plugin_id.clone(),
@@ -309,7 +306,7 @@ pub(crate) mod tests {
             event_description,
         );
 
-        let expected_data = Some(json!(data.clone()));
+        let expected_data = Data::serialize(data.clone()).unwrap();
 
         client
             .lock()
@@ -329,5 +326,41 @@ pub(crate) mod tests {
             .returning(|_| Ok(()));
 
         event.raise(data).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_nodata() {
+        test_raise_event(NoData).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_bool() {
+        test_raise_event(true).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_u8() {
+        test_raise_event(142_u8).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_i32() {
+        test_raise_event(42).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_f32() {
+        test_raise_event(0.42_f32).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_opti32() {
+        test_raise_event(Some(42)).await;
+        test_raise_event::<Option<i32>>(None).await;
+    }
+
+    #[tokio::test]
+    async fn test_raise_event_string() {
+        test_raise_event("foo".to_owned()).await;
     }
 }

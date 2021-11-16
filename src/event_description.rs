@@ -439,3 +439,76 @@ impl<T: Data> EventDescription<T> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::event_description::Data;
+    use serde_json::json;
+
+    #[test]
+    fn test_serialize_bool() {
+        assert_eq!(bool::serialize(true).unwrap(), Some(json!(true)));
+        assert_eq!(bool::serialize(false).unwrap(), Some(json!(false)));
+    }
+
+    #[test]
+    fn test_serialize_u8() {
+        assert_eq!(u8::serialize(142).unwrap(), Some(json!(142)));
+    }
+
+    #[test]
+    fn test_serialize_i32() {
+        assert_eq!(i32::serialize(5).unwrap(), Some(json!(5)));
+        assert_eq!(i32::serialize(-12).unwrap(), Some(json!(-12)));
+    }
+
+    #[test]
+    fn test_serialize_f32() {
+        assert_eq!(f32::serialize(13.5_f32).unwrap(), Some(json!(13.5_f32)));
+        assert_eq!(f32::serialize(-11_f32).unwrap(), Some(json!(-11_f32)));
+    }
+
+    #[test]
+    fn test_serialize_opti32() {
+        assert_eq!(Option::<i32>::serialize(Some(42)).unwrap(), Some(json!(42)));
+        assert_eq!(Option::<i32>::serialize(None).unwrap(), None);
+    }
+
+    #[test]
+    fn test_serialize_veci32() {
+        assert_eq!(Vec::<i32>::serialize(vec![]).unwrap(), Some(json!([])));
+        assert_eq!(
+            Vec::<i32>::serialize(vec![21, 42]).unwrap(),
+            Some(json!([21, 42]))
+        );
+    }
+
+    #[test]
+    fn test_serialize_string() {
+        assert_eq!(String::serialize("".to_owned()).unwrap(), Some(json!("")));
+        assert_eq!(
+            String::serialize("foo".to_owned()).unwrap(),
+            Some(json!("foo"))
+        );
+    }
+
+    #[test]
+    fn test_serialize_jsonvalue() {
+        assert_eq!(
+            serde_json::Value::serialize(json!(true)).unwrap(),
+            Some(json!(true))
+        );
+        assert_eq!(
+            serde_json::Value::serialize(json!(32)).unwrap(),
+            Some(json!(32))
+        );
+        assert_eq!(
+            serde_json::Value::serialize(json!("foo".to_owned())).unwrap(),
+            Some(json!("foo"))
+        );
+        assert_eq!(
+            serde_json::Value::serialize(json!(null)).unwrap(),
+            Some(json!(null))
+        );
+    }
+}
