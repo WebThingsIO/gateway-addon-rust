@@ -329,7 +329,7 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn test_raise_nodata() {
+    async fn test_raise_event_nodata() {
         test_raise_event(NoData).await;
     }
 
