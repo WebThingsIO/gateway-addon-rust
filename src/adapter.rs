@@ -336,7 +336,7 @@ pub(crate) mod tests {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
         let device_id = String::from("device_id");
-        let device_id_copy = device_id.clone();
+        let device_id_clone = device_id.clone();
         let client = Arc::new(Mutex::new(Client::new()));
 
         let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
@@ -351,7 +351,7 @@ pub(crate) mod tests {
                 Message::AdapterRemoveDeviceResponse(msg) => {
                     msg.data.plugin_id == plugin_id
                         && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id_copy
+                        && msg.data.device_id == device_id_clone
                 }
                 _ => false,
             })
