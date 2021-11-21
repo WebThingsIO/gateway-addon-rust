@@ -301,7 +301,7 @@ impl Plugin {
                     .await
                     .on_device_saved(message.device_id, message.device)
                     .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+                    .map_err(|err| format!("Error during adapter.on_device_saved: {}", err))?;
 
                 Ok(MessageResult::Continue)
             }
@@ -316,7 +316,7 @@ impl Plugin {
                     .await
                     .on_start_pairing(Duration::from_secs(message.timeout as u64))
                     .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+                    .map_err(|err| format!("Error during adapter.on_start_pairing: {}", err))?;
 
                 Ok(MessageResult::Continue)
             }
@@ -331,7 +331,7 @@ impl Plugin {
                     .await
                     .on_cancel_pairing()
                     .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+                    .map_err(|err| format!("Error during adapter.on_cancel_pairing: {}", err))?;
 
                 Ok(MessageResult::Continue)
             }
@@ -352,7 +352,9 @@ impl Plugin {
                     .adapter_handle_mut()
                     .remove_device(&message.device_id)
                     .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+                    .map_err(|err| {
+                        format!("Could not remove device from adapter handle: {}", err)
+                    })?;
 
                 Ok(MessageResult::Continue)
             }
