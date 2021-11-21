@@ -996,7 +996,7 @@ mod tests {
             plugin_id: plugin_id.clone(),
             adapter_id: adapter_id.clone(),
             device_id: device_id.clone(),
-            device: device_description,
+            device: device_description.clone(),
         }
         .into();
 
@@ -1006,6 +1006,9 @@ mod tests {
             adapter
                 .adapter_helper
                 .expect_on_device_saved()
+                .withf(move |id, description| {
+                    id == &device_id && description == &device_description
+                })
                 .times(1)
                 .returning(|_, _| Ok(()));
         }
