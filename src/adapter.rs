@@ -228,9 +228,9 @@ impl AdapterHandle {
     pub async fn remove_device<S: Into<String> + Clone>(
         &mut self,
         device_id: S,
-    ) -> Result<(), String> {
+    ) -> Result<(), ApiError> {
         if self.devices.remove(&device_id.clone().into()).is_none() {
-            return Err("Unknown device".to_owned());
+            return Err(ApiError::UnknownDevice(device_id.into()));
         }
 
         let message: Message = AdapterRemoveDeviceResponseMessageData {
@@ -240,12 +240,7 @@ impl AdapterHandle {
         }
         .into();
 
-        self.client
-            .lock()
-            .await
-            .send_message(&message)
-            .await
-            .map_err(|err| format!("Could not send response: {}", err))
+        self.client.lock().await.send_message(&message).await
     }
 }
 
