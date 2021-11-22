@@ -214,7 +214,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 let device = adapter
                     .lock()
@@ -266,7 +266,7 @@ impl Plugin {
                     message.adapter_id
                 );
 
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 adapter
                     .lock()
@@ -294,7 +294,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 adapter
                     .lock()
@@ -309,7 +309,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 adapter
                     .lock()
@@ -324,7 +324,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 adapter
                     .lock()
@@ -339,7 +339,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 let mut adapter = adapter.lock().await;
 
@@ -362,7 +362,7 @@ impl Plugin {
                 message_type: _,
                 data: message,
             }) => {
-                let adapter = self.borrow_adapter(&message.adapter_id)?;
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
 
                 let device = adapter
                     .lock()
@@ -427,14 +427,22 @@ impl Plugin {
         }
     }
 
+    fn borrow_adapter_(
+        &mut self,
+        adapter_id: &str,
+    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, String> {
+        self.borrow_adapter(adapter_id)
+            .map_err(|e| format!("{:?}", e))
+    }
+
     /// Borrow the adapter with the given id.
     pub fn borrow_adapter(
         &mut self,
         adapter_id: &str,
-    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, String> {
+    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, ApiError> {
         self.adapters
             .get_mut(adapter_id)
-            .ok_or_else(|| format!("Cannot find adapter '{}'", adapter_id))
+            .ok_or_else(|| ApiError::UnknownAdapter(adapter_id.to_owned()))
     }
 
     /// Create a new adapter.

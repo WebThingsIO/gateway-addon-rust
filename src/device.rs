@@ -127,7 +127,7 @@ impl DeviceHandle {
             property.property_handle_mut().set_value(value).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownProperty)
+            Err(ApiError::UnknownProperty(name.to_owned()))
         }
     }
 
@@ -216,7 +216,7 @@ impl DeviceHandle {
             event.raise(data).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownEvent)
+            Err(ApiError::UnknownEvent(name.to_owned()))
         }
     }
 }

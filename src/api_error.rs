@@ -29,9 +29,17 @@ pub enum ApiError {
 
     /// Unknown property
     #[error("Unknown property")]
-    UnknownProperty,
+    UnknownProperty(String),
 
     /// Unknown event
     #[error("Unknown event")]
-    UnknownEvent,
+    UnknownEvent(String),
+
+    /// Unknown device
+    #[error("Unknown device")]
+    UnknownDevice(String),
+
+    /// Unknown adapter
+    #[error("Unknown adapter")]
+    UnknownAdapter(String),
 }
