@@ -413,7 +413,7 @@ impl<T: Value> PropertyDescription<T> {
     }
 
     /// Set `description`.
-    pub fn description<S: Into<String>>(mut self, description: S) -> Self {
+    pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
@@ -483,7 +483,7 @@ impl<T: Value> PropertyDescription<T> {
     }
 
     /// Set `title`.
-    pub fn title<S: Into<String>>(mut self, title: S) -> Self {
+    pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }
@@ -502,7 +502,7 @@ impl<T: Value> PropertyDescription<T> {
     }
 
     /// Set `unit`.
-    pub fn unit<S: Into<String>>(mut self, unit: S) -> Self {
+    pub fn unit(mut self, unit: impl Into<String>) -> Self {
         self.unit = Some(unit.into());
         self
     }

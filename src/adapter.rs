@@ -209,7 +209,7 @@ impl AdapterHandle {
     }
 
     /// Get a [device][crate::device::Device] which this adapter owns by ID.
-    pub fn get_device<S: Into<String>>(&self, id: S) -> Option<Arc<Mutex<Box<dyn Device>>>> {
+    pub fn get_device(&self, id: impl Into<String>) -> Option<Arc<Mutex<Box<dyn Device>>>> {
         self.devices.get(&id.into()).cloned()
     }
 
@@ -225,18 +225,16 @@ impl AdapterHandle {
     }
 
     /// Remove a [device][crate::device::Device] which this adapter owns by ID.
-    pub async fn remove_device<S: Into<String> + Clone>(
-        &mut self,
-        device_id: S,
-    ) -> Result<(), ApiError> {
-        if self.devices.remove(&device_id.clone().into()).is_none() {
-            return Err(ApiError::UnknownDevice(device_id.into()));
+    pub async fn remove_device(&mut self, device_id: impl Into<String>) -> Result<(), ApiError> {
+        let device_id = device_id.into();
+        if self.devices.remove(&device_id).is_none() {
+            return Err(ApiError::UnknownDevice(device_id.clone()));
         }
 
         let message: Message = AdapterRemoveDeviceResponseMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
-            device_id: device_id.into(),
+            device_id,
         }
         .into();
 

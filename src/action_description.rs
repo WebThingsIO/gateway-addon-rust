@@ -351,7 +351,7 @@ impl<T: Input> ActionDescription<T> {
     }
 
     /// Set `description`.
-    pub fn description<S: Into<String>>(mut self, description: S) -> Self {
+    pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
@@ -408,7 +408,7 @@ impl<T: Input> ActionDescription<T> {
     }
 
     /// Set `title`.
-    pub fn title<S: Into<String>>(mut self, title: S) -> Self {
+    pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }

@@ -110,9 +110,9 @@ impl DeviceHandle {
     }
 
     /// Get a [property][crate::property::Property] which this device owns by ID.
-    pub fn get_property<S: Into<String>>(
+    pub fn get_property(
         &self,
-        name: S,
+        name: impl Into<String>,
     ) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
         self.properties.get(&name.into()).cloned()
     }
@@ -120,9 +120,9 @@ impl DeviceHandle {
     /// Helper method for setting the value of a [property][crate::property::Property] which this device owns by ID.
     ///
     /// Make sure that the type of the provided value is compatible with the respective property.
-    pub async fn set_property_value<S: Into<String>>(
+    pub async fn set_property_value(
         &self,
-        name: S,
+        name: impl Into<String>,
         value: Option<serde_json::Value>,
     ) -> Result<(), ApiError> {
         let name = name.into();
@@ -149,7 +149,7 @@ impl DeviceHandle {
     }
 
     /// Get an [action][crate::action::Action] which this device owns by ID.
-    pub fn get_action<S: Into<String>>(&self, name: S) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
+    pub fn get_action(&self, name: impl Into<String>) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
         self.actions.get(&name.into()).cloned()
     }
 
@@ -203,9 +203,9 @@ impl DeviceHandle {
     }
 
     /// Get an [event][crate::event::Event] which this device owns by ID.
-    pub fn get_event<S: Into<String>>(
+    pub fn get_event(
         &self,
-        name: S,
+        name: impl Into<String>,
     ) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
         self.events.get(&name.into()).cloned()
     }
@@ -213,9 +213,9 @@ impl DeviceHandle {
     /// Helper method for raising an [event][crate::event::Event] which this device owns by ID.
     ///
     /// Make sure that the type of the provided data is compatible with the respective event.
-    pub async fn raise_event<S: Into<String>>(
+    pub async fn raise_event(
         &self,
-        name: S,
+        name: impl Into<String>,
         data: Option<serde_json::Value>,
     ) -> Result<(), ApiError> {
         let name = name.into();

@@ -73,7 +73,7 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
     }
 
     /// Save raw string for the associated [plugin][crate::plugin::Plugin] to database.
-    pub fn save_string<S: Into<String>>(&self, s: S) -> Result<(), ApiError> {
+    pub fn save_string(&self, s: impl Into<String>) -> Result<(), ApiError> {
         let s = s.into();
         log::trace!("Saving settings string {}", s.clone());
         let key = self.key();

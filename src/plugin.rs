@@ -45,7 +45,7 @@ mod double {
         const GATEWAY_URL: &str = "ws://localhost:9500";
 
         /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
-        pub async fn connect<S: Into<String>>(plugin_id: S) -> Result<Plugin, ApiError> {
+        pub async fn connect(plugin_id: impl Into<String>) -> Result<Plugin, ApiError> {
             let plugin_id = plugin_id.into();
             let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
 
@@ -117,7 +117,7 @@ mod double {
 
         pub(crate) type PluginStream = ();
 
-        pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
+        pub fn connect(plugin_id: impl Into<String>) -> Plugin {
             let preferences = Preferences {
                 language: "en-US".to_owned(),
                 units: Units {
@@ -437,9 +437,9 @@ impl Plugin {
     }
 
     /// Borrow the adapter with the given id.
-    pub fn borrow_adapter<S: Into<String>>(
+    pub fn borrow_adapter(
         &mut self,
-        adapter_id: S,
+        adapter_id: impl Into<String>,
     ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, ApiError> {
         let adapter_id = adapter_id.into();
         self.adapters
@@ -464,16 +464,15 @@ impl Plugin {
     /// #   Ok(())
     /// # }
     /// ```
-    pub async fn create_adapter<T, F, S>(
+    pub async fn create_adapter<T, F>(
         &mut self,
-        adapter_id: S,
-        name: S,
+        adapter_id: impl Into<String>,
+        name: impl Into<String>,
         constructor: F,
     ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, ApiError>
     where
         T: Adapter,
         F: FnOnce(AdapterHandle) -> T,
-        S: Into<String>,
     {
         let adapter_id = adapter_id.into();
 
@@ -515,7 +514,7 @@ impl Plugin {
     /// Fail this plugin.
     ///
     /// This should be done when an error occurs which we cannot recover from.
-    pub async fn fail<S: Into<String>>(&self, message: S) -> Result<(), ApiError> {
+    pub async fn fail(&self, message: impl Into<String>) -> Result<(), ApiError> {
         let message: Message = PluginErrorNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             message: message.into(),
