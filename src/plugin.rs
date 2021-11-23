@@ -550,8 +550,11 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{
-        AdapterRemoveDeviceRequestMessageData, DeviceRequestActionRequestMessageData,
-        DeviceSetPropertyCommandMessageData, Message,
+        AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
+        AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
+        DeviceRequestActionRequestMessageData, DeviceSavedNotificationMessageData,
+        DeviceSetPropertyCommandMessageData, DeviceWithoutId, Message,
+        PluginUnloadRequestMessageData,
     };
 
     async fn add_mock_adapter(
@@ -591,6 +594,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_borrow_unknown_adapter() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let mut plugin = connect(&plugin_id);
+        assert!(plugin.borrow_adapter(&adapter_id).is_err());
+    }
+
+    #[tokio::test]
     async fn test_request_remove_device() {
         let plugin_id = String::from("plugin_id");
         let adapter_id = String::from("adapter_id");
@@ -622,6 +633,18 @@ mod tests {
             })
             .times(1)
             .returning(|_| Ok(()));
+
+        {
+            let device_id_clone = device_id_clone.clone();
+            let mut adapter = adapter.lock().await;
+            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            adapter
+                .adapter_helper
+                .expect_on_remove_device()
+                .withf(move |device_id| device_id == &device_id_clone)
+                .times(1)
+                .returning(|_| Ok(()));
+        }
 
         plugin.handle_message(message).await.unwrap();
 
@@ -785,7 +808,6 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DevicePropertyChangedNotification(msg) => {
-                    println!("asdf {:?} {:?}", msg.data.property.value, serialized_value);
                     msg.data.plugin_id == plugin_id
                         && msg.data.adapter_id == adapter_id
                         && msg.data.device_id == device_id
@@ -842,5 +864,175 @@ mod tests {
             "foo".to_owned(),
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_request_unload() {
+        let plugin_id = String::from("plugin_id");
+
+        let mut plugin = connect(&plugin_id);
+
+        let message: Message = PluginUnloadRequestMessageData {
+            plugin_id: plugin_id.clone(),
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::PluginUnloadResponse(msg) => msg.data.plugin_id == plugin_id,
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_adapter_unload() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+
+        let mut plugin = connect(&plugin_id);
+        add_mock_adapter(&mut plugin, &adapter_id).await;
+
+        let message: Message = AdapterUnloadRequestMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::AdapterUnloadResponse(msg) => {
+                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_adapter_start_pairing() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let timeout = 5000;
+
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+
+        let message: Message = AdapterStartPairingCommandMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+            timeout: timeout,
+        }
+        .into();
+
+        {
+            let mut adapter = adapter.lock().await;
+            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            adapter
+                .adapter_helper
+                .expect_on_start_pairing()
+                .withf(move |t| t.as_secs() == timeout as u64)
+                .times(1)
+                .returning(|_| Ok(()));
+        }
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_request_adapter_cancel_pairing() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+
+        let message: Message = AdapterCancelPairingCommandMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+        }
+        .into();
+
+        {
+            let mut adapter = adapter.lock().await;
+            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            adapter
+                .adapter_helper
+                .expect_on_cancel_pairing()
+                .times(1)
+                .returning(|| Ok(()));
+        }
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_notification_device_saved() {
+        let plugin_id = String::from("plugin_id");
+        let adapter_id = String::from("adapter_id");
+        let device_id = String::from("device_id");
+        let device_description = DeviceWithoutId {
+            at_context: None,
+            at_type: None,
+            actions: None,
+            base_href: None,
+            credentials_required: None,
+            description: None,
+            events: None,
+            links: None,
+            pin: None,
+            properties: None,
+            title: None,
+        };
+
+        let mut plugin = connect(&plugin_id);
+        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+
+        let message: Message = DeviceSavedNotificationMessageData {
+            plugin_id: plugin_id.clone(),
+            adapter_id: adapter_id.clone(),
+            device_id: device_id.clone(),
+            device: device_description.clone(),
+        }
+        .into();
+
+        {
+            let mut adapter = adapter.lock().await;
+            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            adapter
+                .adapter_helper
+                .expect_on_device_saved()
+                .withf(move |id, description| {
+                    id == &device_id && description == &device_description
+                })
+                .times(1)
+                .returning(|_, _| Ok(()));
+        }
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_config_database() {
+        let plugin_id = String::from("plugin_id");
+
+        let plugin = connect(&plugin_id);
+
+        let db = plugin.get_config_database::<serde_json::Value>();
+        assert_eq!(db.plugin_id, plugin_id);
     }
 }

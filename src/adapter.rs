@@ -251,23 +251,65 @@ pub(crate) mod tests {
         client::Client,
         device::{tests::MockDeviceBuilder, Device, DeviceBuilder},
     };
-    use std::sync::Arc;
+    use async_trait::async_trait;
+    use mockall::mock;
+    use std::{sync::Arc, time::Duration};
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::Message;
+    use webthings_gateway_ipc_types::{DeviceWithoutId, Message};
+
+    mock! {
+        pub AdapterHelper {
+            pub async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String>;
+            pub async fn on_cancel_pairing(&mut self) -> Result<(), String>;
+            pub async fn on_device_saved(
+                &mut self,
+                device_id: String,
+                device_description: DeviceWithoutId
+            ) -> Result<(), String>;
+            pub async fn on_remove_device(&mut self, device_id: String) -> Result<(), String>;
+        }
+    }
 
     pub struct MockAdapter {
         adapter_handle: AdapterHandle,
+        pub adapter_helper: MockAdapterHelper,
     }
 
     impl MockAdapter {
         pub fn new(adapter_handle: AdapterHandle) -> Self {
-            Self { adapter_handle }
+            Self {
+                adapter_handle,
+                adapter_helper: MockAdapterHelper::new(),
+            }
         }
     }
 
+    #[async_trait]
     impl Adapter for MockAdapter {
         fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
             &mut self.adapter_handle
+        }
+
+        async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String> {
+            self.adapter_helper.on_start_pairing(timeout).await
+        }
+
+        async fn on_cancel_pairing(&mut self) -> Result<(), String> {
+            self.adapter_helper.on_cancel_pairing().await
+        }
+
+        async fn on_device_saved(
+            &mut self,
+            device_id: String,
+            device_description: DeviceWithoutId,
+        ) -> Result<(), String> {
+            self.adapter_helper
+                .on_device_saved(device_id, device_description)
+                .await
+        }
+
+        async fn on_remove_device(&mut self, device_id: String) -> Result<(), String> {
+            self.adapter_helper.on_remove_device(device_id).await
         }
     }
 
