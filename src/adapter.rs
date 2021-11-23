@@ -209,8 +209,8 @@ impl AdapterHandle {
     }
 
     /// Get a [device][crate::device::Device] which this adapter owns by ID.
-    pub fn get_device(&self, id: &str) -> Option<Arc<Mutex<Box<dyn Device>>>> {
-        self.devices.get(id).cloned()
+    pub fn get_device<S: Into<String>>(&self, id: S) -> Option<Arc<Mutex<Box<dyn Device>>>> {
+        self.devices.get(&id.into()).cloned()
     }
 
     /// Unload this adapter.
