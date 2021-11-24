@@ -443,8 +443,8 @@ impl Plugin {
     ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, ApiError> {
         let adapter_id = adapter_id.into();
         self.adapters
-            .get_mut(&adapter_id.clone())
-            .ok_or_else(|| ApiError::UnknownAdapter(adapter_id))
+            .get_mut(&adapter_id)
+            .ok_or(ApiError::UnknownAdapter(adapter_id))
     }
 
     /// Create a new adapter.
@@ -478,7 +478,7 @@ impl Plugin {
 
         let message: Message = AdapterAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
-            adapter_id: adapter_id.clone().into(),
+            adapter_id: adapter_id.clone(),
             name: name.into(),
             package_name: self.plugin_id.clone(),
         }
