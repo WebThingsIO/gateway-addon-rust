@@ -22,12 +22,12 @@ pub struct Database<T: Serialize + DeserializeOwned> {
 
 impl<T: Serialize + DeserializeOwned> Database<T> {
     /// Open an existing gateway database.
-    pub fn new(mut path: PathBuf, plugin_id: String) -> Self {
+    pub fn new(mut path: PathBuf, plugin_id: impl Into<String>) -> Self {
         path.push("db.sqlite3");
 
         Self {
             path,
-            plugin_id,
+            plugin_id: plugin_id.into(),
             _config: PhantomData,
         }
     }
