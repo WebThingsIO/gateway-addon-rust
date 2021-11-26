@@ -39,7 +39,7 @@ impl ToString for Type {
 }
 
 /// An equivalent of the WoT [type][Type] null.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Debug)]
 pub struct Null;
 
 impl Value for Null {
@@ -60,9 +60,7 @@ impl Value for Null {
                 )),
             }
         } else {
-            Err(ApiError::Serialization(
-                <serde_json::Error as serde::de::Error>::custom("Expected Some, found None"),
-            ))
+            Ok(Null)
         }
     }
 }
@@ -89,5 +87,46 @@ impl Input for Null {
                 <serde_json::Error as serde::de::Error>::custom("Expected Null"),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{action, event, property, type_::Null};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_null_value_deserialize() {
+        assert_eq!(
+            <Null as property::Value>::deserialize(Some(json!(null))).unwrap(),
+            Null
+        );
+        assert_eq!(<Null as property::Value>::deserialize(None).unwrap(), Null);
+        assert!(<Null as property::Value>::deserialize(Some(json!(42))).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_null_value_serialize() {
+        assert_eq!(
+            <Null as property::Value>::serialize(Null).unwrap(),
+            Some(json!(null))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_null_input_deserialize() {
+        assert_eq!(
+            <Null as action::Input>::deserialize(json!(null)).unwrap(),
+            Null
+        );
+        assert!(<Null as action::Input>::deserialize(json!(42)).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_null_data_serialize() {
+        assert_eq!(
+            <Null as event::Data>::serialize(Null).unwrap(),
+            Some(json!(null))
+        );
     }
 }

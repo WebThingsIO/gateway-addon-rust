@@ -555,7 +555,7 @@ impl<T: Value> PropertyDescription<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::property_description::Value;
+    use crate::property_description::{self, Value};
     use serde_json::json;
 
     #[test]
@@ -714,6 +714,51 @@ mod tests {
         assert_eq!(
             serde_json::Value::deserialize(Some(json!(null))).unwrap(),
             json!(null)
+        );
+    }
+
+    #[derive(Default, Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+    struct TestValueObject {
+        b: bool,
+    }
+
+    #[derive(Default, Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+    struct TestValue {
+        i: i32,
+        s: String,
+        o: TestValueObject,
+    }
+
+    impl property_description::SimpleValue for TestValue {}
+
+    #[test]
+    fn test_deserialize_testvalue() {
+        assert_eq!(
+            TestValue::deserialize(Some(json!({"i": 42, "s": "foo", "o": {"b": true}}))).unwrap(),
+            TestValue {
+                i: 42,
+                s: "foo".to_owned(),
+                o: TestValueObject { b: true }
+            }
+        );
+        assert!(
+            TestValue::deserialize(Some(json!({"i": 42, "s": "foo", "o": {"b": 42}}))).is_err()
+        );
+        assert!(TestValue::deserialize(Some(json!(42))).is_err());
+        assert!(TestValue::deserialize(Some(json!(null))).is_err());
+        assert!(TestValue::deserialize(None).is_err());
+    }
+
+    #[test]
+    fn test_serialize_testvalue() {
+        assert_eq!(
+            TestValue::serialize(TestValue {
+                i: 42,
+                s: "foo".to_owned(),
+                o: TestValueObject { b: true }
+            })
+            .unwrap(),
+            Some(json!({"i": 42, "s": "foo", "o": {"b": true}}))
         );
     }
 }

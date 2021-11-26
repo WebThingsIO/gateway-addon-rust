@@ -442,8 +442,13 @@ impl<T: Data> EventDescription<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::event_description::Data;
+    use crate::event_description::{self, Data, NoData};
     use serde_json::json;
+
+    #[test]
+    fn test_serialize_nodata() {
+        assert_eq!(NoData::serialize(NoData).unwrap(), None);
+    }
 
     #[test]
     fn test_serialize_bool() {
@@ -509,6 +514,33 @@ mod tests {
         assert_eq!(
             serde_json::Value::serialize(json!(null)).unwrap(),
             Some(json!(null))
+        );
+    }
+
+    #[derive(Clone, serde::Serialize, PartialEq, Debug)]
+    struct TestDataObject {
+        b: bool,
+    }
+
+    #[derive(Clone, serde::Serialize, PartialEq, Debug)]
+    struct TestData {
+        i: i32,
+        s: String,
+        o: TestDataObject,
+    }
+
+    impl event_description::SimpleData for TestData {}
+
+    #[test]
+    fn test_serialize_testdata() {
+        assert_eq!(
+            TestData::serialize(TestData {
+                i: 42,
+                s: "foo".to_owned(),
+                o: TestDataObject { b: true }
+            })
+            .unwrap(),
+            Some(json!({"i": 42, "s": "foo", "o": {"b": true}}))
         );
     }
 }
