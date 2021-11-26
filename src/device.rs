@@ -110,8 +110,11 @@ impl DeviceHandle {
     }
 
     /// Get a [property][crate::property::Property] which this device owns by ID.
-    pub fn get_property(&self, name: &str) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
-        self.properties.get(name).cloned()
+    pub fn get_property(
+        &self,
+        name: impl Into<String>,
+    ) -> Option<Arc<Mutex<Box<dyn PropertyBase>>>> {
+        self.properties.get(&name.into()).cloned()
     }
 
     /// Helper method for setting the value of a [property][crate::property::Property] which this device owns by ID.
@@ -119,15 +122,16 @@ impl DeviceHandle {
     /// Make sure that the type of the provided value is compatible with the respective property.
     pub async fn set_property_value(
         &self,
-        name: &str,
+        name: impl Into<String>,
         value: Option<serde_json::Value>,
     ) -> Result<(), ApiError> {
-        if let Some(property) = self.properties.get(name) {
+        let name = name.into();
+        if let Some(property) = self.properties.get(&name.clone()) {
             let mut property = property.lock().await;
             property.property_handle_mut().set_value(value).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownProperty(name.to_owned()))
+            Err(ApiError::UnknownProperty(name))
         }
     }
 
@@ -145,8 +149,8 @@ impl DeviceHandle {
     }
 
     /// Get an [action][crate::action::Action] which this device owns by ID.
-    pub fn get_action(&self, name: &str) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
-        self.actions.get(name).cloned()
+    pub fn get_action(&self, name: impl Into<String>) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
+        self.actions.get(&name.into()).cloned()
     }
 
     pub(crate) async fn request_action(
@@ -199,8 +203,11 @@ impl DeviceHandle {
     }
 
     /// Get an [event][crate::event::Event] which this device owns by ID.
-    pub fn get_event(&self, name: &str) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
-        self.events.get(name).cloned()
+    pub fn get_event(
+        &self,
+        name: impl Into<String>,
+    ) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
+        self.events.get(&name.into()).cloned()
     }
 
     /// Helper method for raising an [event][crate::event::Event] which this device owns by ID.
@@ -208,15 +215,16 @@ impl DeviceHandle {
     /// Make sure that the type of the provided data is compatible with the respective event.
     pub async fn raise_event(
         &self,
-        name: &str,
+        name: impl Into<String>,
         data: Option<serde_json::Value>,
     ) -> Result<(), ApiError> {
-        if let Some(event) = self.events.get(name) {
+        let name = name.into();
+        if let Some(event) = self.events.get(&name.clone()) {
             let event = event.lock().await;
             event.raise(data).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownEvent(name.to_owned()))
+            Err(ApiError::UnknownEvent(name))
         }
     }
 }

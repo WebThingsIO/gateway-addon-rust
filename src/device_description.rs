@@ -90,7 +90,7 @@ impl DeviceDescription {
     }
 
     /// Set `@context`.
-    pub fn at_context<S: Into<String>>(mut self, at_context: S) -> Self {
+    pub fn at_context(mut self, at_context: impl Into<String>) -> Self {
         self.at_context = Some(at_context.into());
         self
     }
@@ -121,7 +121,7 @@ impl DeviceDescription {
     }
 
     /// Set `baseHref`.
-    pub fn base_href<S: Into<String>>(mut self, base_href: S) -> Self {
+    pub fn base_href(mut self, base_href: impl Into<String>) -> Self {
         self.base_href = Some(base_href.into());
         self
     }
@@ -133,7 +133,7 @@ impl DeviceDescription {
     }
 
     /// Set `description`.
-    pub fn description<S: Into<String>>(mut self, description: S) -> Self {
+    pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
@@ -179,7 +179,7 @@ impl DeviceDescription {
     }
 
     /// Set `title`.
-    pub fn title<S: Into<String>>(mut self, title: S) -> Self {
+    pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }

@@ -22,12 +22,12 @@ pub struct Database<T: Serialize + DeserializeOwned> {
 
 impl<T: Serialize + DeserializeOwned> Database<T> {
     /// Open an existing gateway database.
-    pub fn new(mut path: PathBuf, plugin_id: String) -> Self {
+    pub fn new(mut path: PathBuf, plugin_id: impl Into<String>) -> Self {
         path.push("db.sqlite3");
 
         Self {
             path,
-            plugin_id,
+            plugin_id: plugin_id.into(),
             _config: PhantomData,
         }
     }
@@ -73,7 +73,8 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
     }
 
     /// Save raw string for the associated [plugin][crate::plugin::Plugin] to database.
-    pub fn save_string(&self, s: String) -> Result<(), ApiError> {
+    pub fn save_string(&self, s: impl Into<String>) -> Result<(), ApiError> {
+        let s = s.into();
         log::trace!("Saving settings string {}", s);
         let key = self.key();
         let connection = self.open()?;
@@ -85,7 +86,7 @@ impl<T: Serialize + DeserializeOwned> Database<T> {
         statement
             .bind(1, key.as_str())
             .map_err(ApiError::Database)?;
-        statement.bind(2, s.as_str()).map_err(ApiError::Database)?;
+        statement.bind(2, &*s).map_err(ApiError::Database)?;
         statement.next().map_err(ApiError::Database)?;
 
         Ok(())

@@ -45,7 +45,8 @@ mod double {
         const GATEWAY_URL: &str = "ws://localhost:9500";
 
         /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
-        pub async fn connect(plugin_id: &str) -> Result<Plugin, ApiError> {
+        pub async fn connect(plugin_id: impl Into<String>) -> Result<Plugin, ApiError> {
+            let plugin_id = plugin_id.into();
             let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
 
             let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
@@ -54,7 +55,7 @@ mod double {
             let mut client = Client::new(sink);
 
             let message: IPCMessage = PluginRegisterRequestMessageData {
-                plugin_id: plugin_id.to_owned(),
+                plugin_id: plugin_id.clone(),
             }
             .into();
 
@@ -81,7 +82,7 @@ mod double {
             };
 
             Ok(Plugin {
-                plugin_id: plugin_id.to_owned(),
+                plugin_id,
                 preferences,
                 user_profile,
                 client: Arc::new(Mutex::new(client)),
@@ -116,7 +117,7 @@ mod double {
 
         pub(crate) type PluginStream = ();
 
-        pub fn connect<S: Into<String>>(plugin_id: S) -> Plugin {
+        pub fn connect(plugin_id: impl Into<String>) -> Plugin {
             let preferences = Preferences {
                 language: "en-US".to_owned(),
                 units: Units {
@@ -438,11 +439,12 @@ impl Plugin {
     /// Borrow the adapter with the given id.
     pub fn borrow_adapter(
         &mut self,
-        adapter_id: &str,
+        adapter_id: impl Into<String>,
     ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, ApiError> {
+        let adapter_id = adapter_id.into();
         self.adapters
-            .get_mut(adapter_id)
-            .ok_or_else(|| ApiError::UnknownAdapter(adapter_id.to_owned()))
+            .get_mut(&adapter_id)
+            .ok_or(ApiError::UnknownAdapter(adapter_id))
     }
 
     /// Create a new adapter.
@@ -462,20 +464,21 @@ impl Plugin {
     /// #   Ok(())
     /// # }
     /// ```
-    pub async fn create_adapter<T, F, S>(
+    pub async fn create_adapter<T, F>(
         &mut self,
-        adapter_id: S,
-        name: S,
+        adapter_id: impl Into<String>,
+        name: impl Into<String>,
         constructor: F,
     ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, ApiError>
     where
         T: Adapter,
         F: FnOnce(AdapterHandle) -> T,
-        S: Into<String> + Clone,
     {
+        let adapter_id = adapter_id.into();
+
         let message: Message = AdapterAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
-            adapter_id: adapter_id.clone().into(),
+            adapter_id: adapter_id.clone(),
             name: name.into(),
             package_name: self.plugin_id.clone(),
         }
@@ -486,14 +489,14 @@ impl Plugin {
         let adapter_handle = AdapterHandle::new(
             self.client.clone(),
             self.plugin_id.clone(),
-            adapter_id.clone().into(),
+            adapter_id.clone(),
         );
 
         let adapter: Arc<Mutex<Box<dyn Adapter>>> =
             Arc::new(Mutex::new(Box::new(constructor(adapter_handle))));
         let adapter_weak = Arc::downgrade(&adapter);
         adapter.lock().await.adapter_handle_mut().weak = adapter_weak;
-        self.adapters.insert(adapter_id.into(), adapter.clone());
+        self.adapters.insert(adapter_id, adapter.clone());
 
         Ok(adapter)
     }
@@ -511,10 +514,10 @@ impl Plugin {
     /// Fail this plugin.
     ///
     /// This should be done when an error occurs which we cannot recover from.
-    pub async fn fail(&self, message: String) -> Result<(), ApiError> {
+    pub async fn fail(&self, message: impl Into<String>) -> Result<(), ApiError> {
         let message: Message = PluginErrorNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
-            message,
+            message: message.into(),
         }
         .into();
 
