@@ -158,8 +158,14 @@ impl Input for NoInput {
         None
     }
 
-    fn deserialize(_value: serde_json::Value) -> Result<Self, ApiError> {
-        Ok(NoInput)
+    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+        if value == serde_json::Value::Null {
+            Ok(NoInput)
+        } else {
+            Err(ApiError::Serialization(serde_json::Error::custom(
+                "Expected no input",
+            )))
+        }
     }
 }
 
@@ -427,8 +433,15 @@ impl<T: Input> ActionDescription<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::action_description::Input;
+    use crate::action_description::{self, Input, NoInput};
+    use schemars::JsonSchema;
     use serde_json::json;
+
+    #[test]
+    fn test_deserialize_noinput() {
+        assert_eq!(NoInput::deserialize(json!(null)).unwrap(), NoInput);
+        assert!(NoInput::deserialize(json!(21)).is_err());
+    }
 
     #[test]
     fn test_deserialize_bool() {
@@ -506,5 +519,34 @@ mod tests {
             serde_json::Value::deserialize(json!(null)).unwrap(),
             json!(null)
         );
+    }
+
+    #[derive(Clone, JsonSchema, serde::Deserialize, PartialEq, Debug)]
+    struct TestInputObject {
+        b: bool,
+    }
+
+    #[derive(Clone, JsonSchema, serde::Deserialize, PartialEq, Debug)]
+    struct TestInput {
+        i: i32,
+        s: String,
+        o: TestInputObject,
+    }
+
+    impl action_description::SimpleInput for TestInput {}
+
+    #[test]
+    fn test_deserialize_testinput() {
+        assert_eq!(
+            TestInput::deserialize(json!({"i": 42, "s": "foo", "o": {"b": true}})).unwrap(),
+            TestInput {
+                i: 42,
+                s: "foo".to_owned(),
+                o: TestInputObject { b: true }
+            }
+        );
+        assert!(TestInput::deserialize(json!({"i": 42, "s": "foo", "o": {"b": 42}})).is_err());
+        assert!(TestInput::deserialize(json!(42)).is_err());
+        assert!(TestInput::deserialize(json!(null)).is_err());
     }
 }
