@@ -545,6 +545,7 @@ mod tests {
             tests::{add_mock_device, MockAdapter},
             Adapter,
         },
+        device::tests::MockDevice,
         plugin::{connect, Plugin},
         property::{self, tests::MockProperty},
     };
@@ -587,37 +588,34 @@ mod tests {
             .unwrap()
     }
 
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
+    const DEVICE_ID: &str = "device_id";
+    const ACTION_ID: &str = "action_id";
+
     #[tokio::test]
     async fn test_create_adapter() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let mut plugin = connect(&plugin_id);
-        add_mock_adapter(&mut plugin, &adapter_id).await;
-        assert!(plugin.borrow_adapter(&adapter_id).is_ok());
+        let mut plugin = connect(PLUGIN_ID);
+        add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        assert!(plugin.borrow_adapter(ADAPTER_ID).is_ok());
     }
 
     #[tokio::test]
     async fn test_borrow_unknown_adapter() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let mut plugin = connect(&plugin_id);
-        assert!(plugin.borrow_adapter(&adapter_id).is_err());
+        let mut plugin = connect(PLUGIN_ID);
+        assert!(plugin.borrow_adapter(ADAPTER_ID).is_err());
     }
 
     #[tokio::test]
     async fn test_request_remove_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let device_id_clone = device_id.clone();
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
-        add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
         let message: Message = AdapterRemoveDeviceRequestMessageData {
-            device_id: device_id.clone(),
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.to_owned(),
+            device_id: DEVICE_ID.to_owned(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
         }
         .into();
 
@@ -628,9 +626,9 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterRemoveDeviceResponse(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
                 }
                 _ => false,
             })
@@ -638,13 +636,12 @@ mod tests {
             .returning(|_| Ok(()));
 
         {
-            let device_id_clone = device_id_clone.clone();
             let mut adapter = adapter.lock().await;
             let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
             adapter
                 .adapter_helper
                 .expect_on_remove_device()
-                .withf(move |device_id| device_id == &device_id_clone)
+                .withf(move |device_id| device_id == DEVICE_ID)
                 .times(1)
                 .returning(|_| Ok(()));
         }
@@ -655,23 +652,18 @@ mod tests {
             .lock()
             .await
             .adapter_handle_mut()
-            .get_device(&device_id_clone)
+            .get_device(DEVICE_ID)
             .is_none())
     }
 
     async fn test_request_action_perform<T: Input + PartialEq>(
-        action_name: String,
+        action_name: &'static str,
         action_input: serde_json::Value,
         expected_input: T,
     ) {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let action_id = String::from("action_id");
-
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
         {
             let mut device = device.lock().await;
@@ -687,11 +679,11 @@ mod tests {
         }
 
         let message: Message = DeviceRequestActionRequestMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
-            device_id: device_id.clone(),
-            action_name: action_name.clone(),
-            action_id: action_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
+            device_id: DEVICE_ID.to_owned(),
+            action_name: action_name.to_owned(),
+            action_id: ACTION_ID.to_owned(),
             input: action_input,
         }
         .into();
@@ -703,11 +695,11 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DeviceRequestActionResponse(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
                         && msg.data.action_name == action_name
-                        && msg.data.action_id == action_id
+                        && msg.data.action_id == ACTION_ID
                 }
                 _ => false,
             })
@@ -719,62 +711,50 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_action_noinput_perform() {
-        test_request_action_perform(String::from("action_noinput"), json!(null), NoInput).await;
+        test_request_action_perform(MockDevice::ACTION_NOINPUT, json!(null), NoInput).await;
     }
 
     #[tokio::test]
     async fn test_request_action_bool_perform() {
-        test_request_action_perform(String::from("action_bool"), json!(true), true).await;
+        test_request_action_perform(MockDevice::ACTION_BOOL, json!(true), true).await;
     }
 
     #[tokio::test]
     async fn test_request_action_u8_perform() {
-        test_request_action_perform(String::from("action_u8"), json!(112_u8), 112_u8).await;
+        test_request_action_perform(MockDevice::ACTION_U8, json!(112_u8), 112_u8).await;
     }
 
     #[tokio::test]
     async fn test_request_action_i32_perform() {
-        test_request_action_perform(String::from("action_i32"), json!(21), 21).await;
+        test_request_action_perform(MockDevice::ACTION_I32, json!(21), 21).await;
     }
 
     #[tokio::test]
     async fn test_request_action_f32_perform() {
-        test_request_action_perform(String::from("action_f32"), json!(-2.7_f32), -2.7_f32).await;
+        test_request_action_perform(MockDevice::ACTION_F32, json!(-2.7_f32), -2.7_f32).await;
     }
 
     #[tokio::test]
     async fn test_request_action_opti32_perform() {
-        test_request_action_perform(String::from("action_opti32"), json!(11), Some(11)).await;
-        test_request_action_perform::<Option<i32>>(
-            String::from("action_opti32"),
-            json!(null),
-            None,
-        )
-        .await;
+        test_request_action_perform(MockDevice::ACTION_OPTI32, json!(11), Some(11)).await;
+        test_request_action_perform::<Option<i32>>(MockDevice::ACTION_OPTI32, json!(null), None)
+            .await;
     }
 
     #[tokio::test]
     async fn test_request_action_string_perform() {
-        test_request_action_perform(
-            String::from("action_string"),
-            json!("foo"),
-            "foo".to_owned(),
-        )
-        .await;
+        test_request_action_perform(MockDevice::ACTION_STRING, json!("foo"), "foo".to_owned())
+            .await;
     }
 
     async fn test_request_property_update_value<T: property::Value + PartialEq>(
-        property_name: String,
+        property_name: &'static str,
         property_value: serde_json::Value,
         expected_value: T,
     ) {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), &device_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
         {
             let expected_value = expected_value.clone();
@@ -796,10 +776,10 @@ mod tests {
         let serialized_value = property::Value::serialize(expected_value.clone()).unwrap();
 
         let message: Message = DeviceSetPropertyCommandMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
-            device_id: device_id.clone(),
-            property_name: property_name.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
+            device_id: DEVICE_ID.to_owned(),
+            property_name: property_name.to_owned(),
             property_value,
         }
         .into();
@@ -811,9 +791,9 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DevicePropertyChangedNotification(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
                         && msg.data.property.name == Some(property_name.to_owned())
                         && msg.data.property.value == serialized_value
                 }
@@ -827,32 +807,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_property_bool_update_value() {
-        test_request_property_update_value(String::from("property_bool"), json!(true), true).await;
+        test_request_property_update_value(MockDevice::PROPERTY_BOOL, json!(true), true).await;
     }
 
     #[tokio::test]
     async fn test_request_property_u8_update_value() {
-        test_request_property_update_value(String::from("property_u8"), json!(112_u8), 112_u8)
-            .await;
+        test_request_property_update_value(MockDevice::PROPERTY_U8, json!(112_u8), 112_u8).await;
     }
 
     #[tokio::test]
     async fn test_request_property_i32_update_value() {
-        test_request_property_update_value(String::from("property_i32"), json!(21), 21).await;
+        test_request_property_update_value(MockDevice::PROPERTY_I32, json!(21), 21).await;
     }
 
     #[tokio::test]
     async fn test_request_property_f32_update_value() {
-        test_request_property_update_value(String::from("property_f32"), json!(-2.7_f32), -2.7_f32)
+        test_request_property_update_value(MockDevice::PROPERTY_F32, json!(-2.7_f32), -2.7_f32)
             .await;
     }
 
     #[tokio::test]
     async fn test_request_property_opti32_update_value() {
-        test_request_property_update_value(String::from("property_opti32"), json!(21), Some(21))
-            .await;
+        test_request_property_update_value(MockDevice::PROPERTY_OPTI32, json!(21), Some(21)).await;
         test_request_property_update_value::<Option<i32>>(
-            String::from("property_opti32"),
+            MockDevice::PROPERTY_OPTI32,
             json!(null),
             None,
         )
@@ -862,7 +840,7 @@ mod tests {
     #[tokio::test]
     async fn test_request_property_string_update_value() {
         test_request_property_update_value(
-            String::from("property_string"),
+            MockDevice::PROPERTY_STRING,
             json!("foo"),
             "foo".to_owned(),
         )
@@ -871,12 +849,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_unload() {
-        let plugin_id = String::from("plugin_id");
-
-        let mut plugin = connect(&plugin_id);
+        let mut plugin = connect(PLUGIN_ID);
 
         let message: Message = PluginUnloadRequestMessageData {
-            plugin_id: plugin_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
         }
         .into();
 
@@ -886,7 +862,7 @@ mod tests {
             .await
             .expect_send_message()
             .withf(move |msg| match msg {
-                Message::PluginUnloadResponse(msg) => msg.data.plugin_id == plugin_id,
+                Message::PluginUnloadResponse(msg) => msg.data.plugin_id == PLUGIN_ID,
                 _ => false,
             })
             .times(1)
@@ -897,15 +873,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_adapter_unload() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-
-        let mut plugin = connect(&plugin_id);
-        add_mock_adapter(&mut plugin, &adapter_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterUnloadRequestMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
         }
         .into();
 
@@ -916,7 +889,7 @@ mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterUnloadResponse(msg) => {
-                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id
+                    msg.data.plugin_id == PLUGIN_ID && msg.data.adapter_id == ADAPTER_ID
                 }
                 _ => false,
             })
@@ -928,16 +901,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_adapter_start_pairing() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
         let timeout = 5000;
 
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterStartPairingCommandMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
             timeout: timeout,
         }
         .into();
@@ -958,15 +929,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_adapter_cancel_pairing() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterCancelPairingCommandMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
         }
         .into();
 
@@ -985,9 +953,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_notification_device_saved() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
         let device_description = DeviceWithoutId {
             at_context: None,
             at_type: None,
@@ -1002,13 +967,13 @@ mod tests {
             title: None,
         };
 
-        let mut plugin = connect(&plugin_id);
-        let adapter = add_mock_adapter(&mut plugin, &adapter_id).await;
+        let mut plugin = connect(PLUGIN_ID);
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = DeviceSavedNotificationMessageData {
-            plugin_id: plugin_id.clone(),
-            adapter_id: adapter_id.clone(),
-            device_id: device_id.clone(),
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
+            device_id: DEVICE_ID.to_owned(),
             device: device_description.clone(),
         }
         .into();
@@ -1019,9 +984,7 @@ mod tests {
             adapter
                 .adapter_helper
                 .expect_on_device_saved()
-                .withf(move |id, description| {
-                    id == &device_id && description == &device_description
-                })
+                .withf(move |id, description| id == DEVICE_ID && description == &device_description)
                 .times(1)
                 .returning(|_, _| Ok(()));
         }
@@ -1031,11 +994,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_config_database() {
-        let plugin_id = String::from("plugin_id");
-
-        let plugin = connect(&plugin_id);
+        let plugin = connect(PLUGIN_ID);
 
         let db = plugin.get_config_database::<serde_json::Value>();
-        assert_eq!(db.plugin_id, plugin_id);
+        assert_eq!(db.plugin_id, PLUGIN_ID);
     }
 }

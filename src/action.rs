@@ -335,26 +335,30 @@ pub(crate) mod tests {
         }
     }
 
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
+    const DEVICE_ID: &str = "device_id";
+    const ACTION_NAME: &str = "action_name";
+    const ACTION_ID: &str = "action_id";
+    const PENDING: &str = "pending";
+    const COMPLETED: &str = "completed";
+    const INPUT: serde_json::Value = json!(null);
+
     #[tokio::test]
     async fn test_action_start() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let action_name = String::from("action_name");
-        let action_id = String::from("action_id");
         let client = Arc::new(Mutex::new(Client::new()));
         let input = json!(null);
 
         let mut action = ActionHandle::new(
             client.clone(),
             Weak::new(),
-            plugin_id.clone(),
-            adapter_id.clone(),
-            device_id.clone(),
-            action_name.clone(),
-            action_id.clone(),
+            PLUGIN_ID.to_owned(),
+            ADAPTER_ID.to_owned(),
+            DEVICE_ID.to_owned(),
+            ACTION_NAME.to_owned(),
+            ACTION_ID.to_owned(),
             NoInput,
-            input.clone(),
+            INPUT,
         );
 
         client
@@ -363,13 +367,13 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DeviceActionStatusNotification(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
-                        && msg.data.action.name == action_name
-                        && msg.data.action.id == action_id
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.action.name == ACTION_NAME
+                        && msg.data.action.id == ACTION_ID
                         && msg.data.action.input == Some(input.clone())
-                        && msg.data.action.status == "pending"
+                        && msg.data.action.status == PENDING
                         && msg.data.action.time_completed == None
                 }
                 _ => false,
@@ -382,24 +386,18 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn test_action_finish() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let action_name = String::from("action_name");
-        let action_id = String::from("action_id");
         let client = Arc::new(Mutex::new(Client::new()));
-        let input = json!(null);
 
         let mut action = ActionHandle::new(
             client.clone(),
             Weak::new(),
-            plugin_id.clone(),
-            adapter_id.clone(),
-            device_id.clone(),
-            action_name.clone(),
-            action_id.clone(),
+            PLUGIN_ID.to_owned(),
+            ADAPTER_ID.to_owned(),
+            DEVICE_ID.to_owned(),
+            ACTION_NAME.to_owned(),
+            ACTION_ID.to_owned(),
             NoInput,
-            input.clone(),
+            INPUT,
         );
 
         client
@@ -408,13 +406,13 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DeviceActionStatusNotification(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
-                        && msg.data.action.name == action_name
-                        && msg.data.action.id == action_id
-                        && msg.data.action.input == Some(input.clone())
-                        && msg.data.action.status == "completed"
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.action.name == ACTION_NAME
+                        && msg.data.action.id == ACTION_ID
+                        && msg.data.action.input == Some(INPUT)
+                        && msg.data.action.status == COMPLETED
                         && msg.data.action.time_completed.is_some()
                 }
                 _ => false,

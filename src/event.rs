@@ -287,11 +287,12 @@ pub(crate) mod tests {
         }
     }
 
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
+    const DEVICE_ID: &str = "device_id";
+    const EVENT_NAME: &str = "event_name";
+
     async fn test_raise_event<T: Data + PartialEq>(data: T) {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let event_name = String::from("event_name");
         let client = Arc::new(Mutex::new(Client::new()));
 
         let event_description = EventDescription::default();
@@ -299,10 +300,10 @@ pub(crate) mod tests {
         let event = EventHandle::<T>::new(
             client.clone(),
             Weak::new(),
-            plugin_id.clone(),
-            adapter_id.clone(),
-            device_id.clone(),
-            event_name.clone(),
+            PLUGIN_ID.to_owned(),
+            ADAPTER_ID.to_owned(),
+            DEVICE_ID.to_owned(),
+            EVENT_NAME.to_owned(),
             event_description,
         );
 
@@ -314,10 +315,10 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DeviceEventNotification(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
-                        && msg.data.event.name == event_name.clone()
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.event.name == EVENT_NAME
                         && msg.data.event.data == expected_data
                 }
                 _ => false,

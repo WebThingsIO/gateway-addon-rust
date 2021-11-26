@@ -340,43 +340,40 @@ pub(crate) mod tests {
         adapter.add_device(device_builder).await.unwrap()
     }
 
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
+    const DEVICE_ID: &str = "device_id";
+
     #[tokio::test]
     async fn test_add_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
         let client = Arc::new(Mutex::new(Client::new()));
 
-        let mut adapter = AdapterHandle::new(client.clone(), plugin_id, adapter_id);
+        let mut adapter =
+            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
 
-        add_mock_device(&mut adapter, &device_id).await;
+        add_mock_device(&mut adapter, DEVICE_ID).await;
 
-        assert!(adapter.get_device(&device_id).is_some())
+        assert!(adapter.get_device(DEVICE_ID).is_some())
     }
 
     #[tokio::test]
     async fn test_get_unknown_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
         let client = Arc::new(Mutex::new(Client::new()));
 
-        let adapter = AdapterHandle::new(client.clone(), plugin_id, adapter_id);
+        let adapter =
+            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
 
-        assert!(adapter.get_device(&device_id).is_none())
+        assert!(adapter.get_device(DEVICE_ID).is_none())
     }
 
     #[tokio::test]
     async fn test_remove_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let device_id_clone = device_id.clone();
         let client = Arc::new(Mutex::new(Client::new()));
 
-        let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+        let mut adapter =
+            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
 
-        add_mock_device(&mut adapter, &device_id).await;
+        add_mock_device(&mut adapter, DEVICE_ID).await;
 
         client
             .lock()
@@ -384,39 +381,36 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterRemoveDeviceResponse(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id_clone
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
                 }
                 _ => false,
             })
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter.remove_device(device_id.clone()).await.unwrap();
+        adapter.remove_device(DEVICE_ID.to_owned()).await.unwrap();
 
-        assert!(adapter.get_device(&device_id).is_none())
+        assert!(adapter.get_device(DEVICE_ID).is_none())
     }
 
     #[tokio::test]
     async fn test_remove_unknown_device() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
         let client = Arc::new(Mutex::new(Client::new()));
 
-        let mut adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+        let mut adapter =
+            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
 
-        assert!(adapter.remove_device(device_id).await.is_err())
+        assert!(adapter.remove_device(DEVICE_ID).await.is_err())
     }
 
     #[tokio::test]
     async fn test_unload() {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
         let client = Arc::new(Mutex::new(Client::new()));
 
-        let adapter = AdapterHandle::new(client.clone(), plugin_id.clone(), adapter_id.clone());
+        let adapter =
+            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
 
         adapter
             .client
@@ -425,7 +419,7 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterUnloadResponse(msg) => {
-                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id
+                    msg.data.plugin_id == PLUGIN_ID && msg.data.adapter_id == ADAPTER_ID
                 }
                 _ => false,
             })
