@@ -667,7 +667,7 @@ mod tests {
 
         {
             let mut device = device.lock().await;
-            let action = device.device_handle_mut().get_action(&action_name).unwrap();
+            let action = device.device_handle_mut().get_action(action_name).unwrap();
             let mut action = action.lock().await;
             let action = action.as_any_mut().downcast_mut::<MockAction<T>>().unwrap();
             action
@@ -761,7 +761,7 @@ mod tests {
             let mut device = device.lock().await;
             let property = device
                 .device_handle_mut()
-                .get_property(&property_name)
+                .get_property(property_name)
                 .unwrap();
             let mut property = property.lock().await;
             let property = property.downcast_mut::<MockProperty<T>>().unwrap();
