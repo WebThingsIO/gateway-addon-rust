@@ -322,6 +322,7 @@ pub(crate) mod tests {
     };
     use async_trait::async_trait;
     use mockall::mock;
+    use rstest::rstest;
     use std::{
         marker::PhantomData,
         sync::{Arc, Weak},
@@ -396,7 +397,16 @@ pub(crate) mod tests {
     const DEVICE_ID: &str = "device_id";
     const PROPERTY_NAME: &str = "property_name";
 
-    async fn test_set_value<T: property::Value + PartialEq>(value: T) {
+    #[rstest]
+    #[case(true)]
+    #[case(142_u8)]
+    #[case(42)]
+    #[case(0.42_f32)]
+    #[case(Some(42))]
+    #[case(Option::<i32>::None)]
+    #[case("foo".to_owned())]
+    #[tokio::test]
+    async fn test_set_value<T: property::Value + PartialEq>(#[case] value: T) {
         let client = Arc::new(Mutex::new(Client::new()));
 
         let property_description = PropertyDescription::<T>::default();
@@ -433,36 +443,5 @@ pub(crate) mod tests {
         property.set_value(value.clone()).await.unwrap();
 
         assert!(property.description.value == value);
-    }
-
-    #[tokio::test]
-    async fn test_set_value_bool() {
-        test_set_value(true).await;
-    }
-
-    #[tokio::test]
-    async fn test_set_value_u8() {
-        test_set_value(142_u8).await;
-    }
-
-    #[tokio::test]
-    async fn test_set_value_i32() {
-        test_set_value(42).await;
-    }
-
-    #[tokio::test]
-    async fn test_set_value_f32() {
-        test_set_value(0.42_f32).await;
-    }
-
-    #[tokio::test]
-    async fn test_set_value_opti32() {
-        test_set_value(Some(42)).await;
-        test_set_value::<Option<i32>>(None).await;
-    }
-
-    #[tokio::test]
-    async fn test_set_value_string() {
-        test_set_value("foo".to_owned()).await;
     }
 }

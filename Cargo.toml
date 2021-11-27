@@ -30,6 +30,7 @@ features = ["sync", "time", "macros"]
 
 [dev-dependencies]
 mockall = "0.10"
+rstest = "0.11.0"
 
 [dev-dependencies.tokio]
 version = "1"
