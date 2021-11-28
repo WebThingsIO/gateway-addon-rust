@@ -391,11 +391,12 @@ pub(crate) mod tests {
         }
     }
 
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
+    const DEVICE_ID: &str = "device_id";
+    const PROPERTY_NAME: &str = "property_name";
+
     async fn test_set_value<T: property::Value + PartialEq>(value: T) {
-        let plugin_id = String::from("plugin_id");
-        let adapter_id = String::from("adapter_id");
-        let device_id = String::from("device_id");
-        let property_name = String::from("property_name");
         let client = Arc::new(Mutex::new(Client::new()));
 
         let property_description = PropertyDescription::<T>::default();
@@ -403,10 +404,10 @@ pub(crate) mod tests {
         let mut property = PropertyHandle::new(
             client.clone(),
             Weak::new(),
-            plugin_id.clone(),
-            adapter_id.clone(),
-            device_id.clone(),
-            property_name.clone(),
+            PLUGIN_ID.to_owned(),
+            ADAPTER_ID.to_owned(),
+            DEVICE_ID.to_owned(),
+            PROPERTY_NAME.to_owned(),
             property_description,
         );
 
@@ -418,10 +419,10 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::DevicePropertyChangedNotification(msg) => {
-                    msg.data.plugin_id == plugin_id
-                        && msg.data.adapter_id == adapter_id
-                        && msg.data.device_id == device_id
-                        && msg.data.property.name == Some(property_name.clone())
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.property.name == Some(PROPERTY_NAME.to_owned())
                         && msg.data.property.value == expected_value
                 }
                 _ => false,
