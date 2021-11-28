@@ -254,6 +254,7 @@ pub(crate) mod tests {
         event::{Event, EventHandle},
         event_description::{Data, EventDescription, NoData},
     };
+    use rstest::rstest;
     use std::{
         marker::PhantomData,
         sync::{Arc, Weak},
@@ -292,7 +293,17 @@ pub(crate) mod tests {
     const DEVICE_ID: &str = "device_id";
     const EVENT_NAME: &str = "event_name";
 
-    async fn test_raise_event<T: Data + PartialEq>(data: T) {
+    #[rstest]
+    #[case(NoData)]
+    #[case(true)]
+    #[case(142_u8)]
+    #[case(42)]
+    #[case(0.42_f32)]
+    #[case(Some(42))]
+    #[case(Option::<i32>::None)]
+    #[case("foo".to_owned())]
+    #[tokio::test]
+    async fn test_raise_event<T: Data + PartialEq>(#[case] data: T) {
         let client = Arc::new(Mutex::new(Client::new()));
 
         let event_description = EventDescription::default();
@@ -327,41 +338,5 @@ pub(crate) mod tests {
             .returning(|_| Ok(()));
 
         event.raise(data).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_nodata() {
-        test_raise_event(NoData).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_bool() {
-        test_raise_event(true).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_u8() {
-        test_raise_event(142_u8).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_i32() {
-        test_raise_event(42).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_f32() {
-        test_raise_event(0.42_f32).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_opti32() {
-        test_raise_event(Some(42)).await;
-        test_raise_event::<Option<i32>>(None).await;
-    }
-
-    #[tokio::test]
-    async fn test_raise_event_string() {
-        test_raise_event("foo".to_owned()).await;
     }
 }

@@ -550,6 +550,7 @@ mod tests {
         property::{self, tests::MockProperty},
     };
     use as_any::Downcast;
+    use rstest::rstest;
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -656,10 +657,20 @@ mod tests {
             .is_none())
     }
 
+    #[rstest]
+    #[case(MockDevice::ACTION_NOINPUT, json!(null), NoInput)]
+    #[case(MockDevice::ACTION_BOOL, json!(true), true)]
+    #[case(MockDevice::ACTION_U8, json!(112_u8), 112_u8)]
+    #[case(MockDevice::ACTION_I32, json!(21), 21)]
+    #[case(MockDevice::ACTION_F32, json!(-2.7_f32), -2.7_f32)]
+    #[case(MockDevice::ACTION_OPTI32, json!(11), Some(11))]
+    #[case(MockDevice::ACTION_OPTI32, json!(null), Option::<i32>::None)]
+    #[case(MockDevice::ACTION_STRING, json!("foo"), "foo".to_owned())]
+    #[tokio::test]
     async fn test_request_action_perform<T: Input + PartialEq>(
-        action_name: &'static str,
-        action_input: serde_json::Value,
-        expected_input: T,
+        #[case] action_name: &'static str,
+        #[case] action_input: serde_json::Value,
+        #[case] expected_input: T,
     ) {
         let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
@@ -709,48 +720,19 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
+    #[case(MockDevice::PROPERTY_BOOL, json!(true), true)]
+    #[case(MockDevice::PROPERTY_U8, json!(112_u8), 112_u8)]
+    #[case(MockDevice::PROPERTY_I32, json!(21), 21)]
+    #[case(MockDevice::PROPERTY_F32, json!(-2.7_f32), -2.7_f32)]
+    #[case(MockDevice::PROPERTY_OPTI32, json!(11), Some(11))]
+    #[case(MockDevice::PROPERTY_OPTI32, json!(null), Option::<i32>::None)]
+    #[case(MockDevice::PROPERTY_STRING, json!("foo"), "foo".to_owned())]
     #[tokio::test]
-    async fn test_request_action_noinput_perform() {
-        test_request_action_perform(MockDevice::ACTION_NOINPUT, json!(null), NoInput).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_bool_perform() {
-        test_request_action_perform(MockDevice::ACTION_BOOL, json!(true), true).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_u8_perform() {
-        test_request_action_perform(MockDevice::ACTION_U8, json!(112_u8), 112_u8).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_i32_perform() {
-        test_request_action_perform(MockDevice::ACTION_I32, json!(21), 21).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_f32_perform() {
-        test_request_action_perform(MockDevice::ACTION_F32, json!(-2.7_f32), -2.7_f32).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_opti32_perform() {
-        test_request_action_perform(MockDevice::ACTION_OPTI32, json!(11), Some(11)).await;
-        test_request_action_perform::<Option<i32>>(MockDevice::ACTION_OPTI32, json!(null), None)
-            .await;
-    }
-
-    #[tokio::test]
-    async fn test_request_action_string_perform() {
-        test_request_action_perform(MockDevice::ACTION_STRING, json!("foo"), "foo".to_owned())
-            .await;
-    }
-
     async fn test_request_property_update_value<T: property::Value + PartialEq>(
-        property_name: &'static str,
-        property_value: serde_json::Value,
-        expected_value: T,
+        #[case] property_name: &'static str,
+        #[case] property_value: serde_json::Value,
+        #[case] expected_value: T,
     ) {
         let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
@@ -803,48 +785,6 @@ mod tests {
             .returning(|_| Ok(()));
 
         plugin.handle_message(message).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_request_property_bool_update_value() {
-        test_request_property_update_value(MockDevice::PROPERTY_BOOL, json!(true), true).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_property_u8_update_value() {
-        test_request_property_update_value(MockDevice::PROPERTY_U8, json!(112_u8), 112_u8).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_property_i32_update_value() {
-        test_request_property_update_value(MockDevice::PROPERTY_I32, json!(21), 21).await;
-    }
-
-    #[tokio::test]
-    async fn test_request_property_f32_update_value() {
-        test_request_property_update_value(MockDevice::PROPERTY_F32, json!(-2.7_f32), -2.7_f32)
-            .await;
-    }
-
-    #[tokio::test]
-    async fn test_request_property_opti32_update_value() {
-        test_request_property_update_value(MockDevice::PROPERTY_OPTI32, json!(21), Some(21)).await;
-        test_request_property_update_value::<Option<i32>>(
-            MockDevice::PROPERTY_OPTI32,
-            json!(null),
-            None,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_request_property_string_update_value() {
-        test_request_property_update_value(
-            MockDevice::PROPERTY_STRING,
-            json!("foo"),
-            "foo".to_owned(),
-        )
-        .await;
     }
 
     #[tokio::test]
