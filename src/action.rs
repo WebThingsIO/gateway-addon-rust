@@ -332,6 +332,7 @@ pub(crate) mod tests {
             &mut self,
             action_handle: ActionHandle<Self::Input>,
         ) -> Result<(), String> {
+            assert!(action_handle.device.upgrade().is_some());
             self.action_helper.perform(action_handle)
         }
     }
