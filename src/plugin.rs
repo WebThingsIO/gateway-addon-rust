@@ -550,7 +550,7 @@ mod tests {
         property::{self, tests::MockProperty},
     };
     use as_any::Downcast;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -594,22 +594,27 @@ mod tests {
     const DEVICE_ID: &str = "device_id";
     const ACTION_ID: &str = "action_id";
 
+    #[fixture]
+    fn plugin() -> Plugin {
+        connect(PLUGIN_ID)
+    }
+
+    #[rstest]
     #[tokio::test]
-    async fn test_create_adapter() {
-        let mut plugin = connect(PLUGIN_ID);
+    async fn test_create_adapter(mut plugin: Plugin) {
         add_mock_adapter(&mut plugin, ADAPTER_ID).await;
         assert!(plugin.borrow_adapter(ADAPTER_ID).is_ok());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_borrow_unknown_adapter() {
-        let mut plugin = connect(PLUGIN_ID);
+    async fn test_borrow_unknown_adapter(mut plugin: Plugin) {
         assert!(plugin.borrow_adapter(ADAPTER_ID).is_err());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_request_remove_device() {
-        let mut plugin = connect(PLUGIN_ID);
+    async fn test_request_remove_device(mut plugin: Plugin) {
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
         add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
@@ -671,8 +676,8 @@ mod tests {
         #[case] action_name: &'static str,
         #[case] action_input: serde_json::Value,
         #[case] expected_input: T,
+        mut plugin: Plugin,
     ) {
-        let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
         let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
@@ -733,8 +738,8 @@ mod tests {
         #[case] property_name: &'static str,
         #[case] property_value: serde_json::Value,
         #[case] expected_value: T,
+        mut plugin: Plugin,
     ) {
-        let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
         let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
@@ -787,10 +792,9 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_request_unload() {
-        let mut plugin = connect(PLUGIN_ID);
-
+    async fn test_request_unload(mut plugin: Plugin) {
         let message: Message = PluginUnloadRequestMessageData {
             plugin_id: PLUGIN_ID.to_owned(),
         }
@@ -811,9 +815,9 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_request_adapter_unload() {
-        let mut plugin = connect(PLUGIN_ID);
+    async fn test_request_adapter_unload(mut plugin: Plugin) {
         add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterUnloadRequestMessageData {
@@ -839,11 +843,10 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_request_adapter_start_pairing() {
+    async fn test_request_adapter_start_pairing(mut plugin: Plugin) {
         let timeout = 5000;
-
-        let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterStartPairingCommandMessageData {
@@ -867,9 +870,9 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_request_adapter_cancel_pairing() {
-        let mut plugin = connect(PLUGIN_ID);
+    async fn test_request_adapter_cancel_pairing(mut plugin: Plugin) {
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = AdapterCancelPairingCommandMessageData {
@@ -891,8 +894,9 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_notification_device_saved() {
+    async fn test_notification_device_saved(mut plugin: Plugin) {
         let device_description = DeviceWithoutId {
             at_context: None,
             at_type: None,
@@ -906,8 +910,6 @@ mod tests {
             properties: None,
             title: None,
         };
-
-        let mut plugin = connect(PLUGIN_ID);
         let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
 
         let message: Message = DeviceSavedNotificationMessageData {
@@ -932,10 +934,9 @@ mod tests {
         plugin.handle_message(message).await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_get_config_database() {
-        let plugin = connect(PLUGIN_ID);
-
+    async fn test_get_config_database(plugin: Plugin) {
         let db = plugin.get_config_database::<serde_json::Value>();
         assert_eq!(db.plugin_id, PLUGIN_ID);
     }

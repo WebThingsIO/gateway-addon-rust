@@ -251,6 +251,7 @@ pub(crate) mod tests {
     };
     use async_trait::async_trait;
     use mockall::mock;
+    use rstest::{fixture, rstest};
     use std::{sync::Arc, time::Duration};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{DeviceWithoutId, Message};
@@ -344,38 +345,32 @@ pub(crate) mod tests {
     const ADAPTER_ID: &str = "adapter_id";
     const DEVICE_ID: &str = "device_id";
 
-    #[tokio::test]
-    async fn test_add_device() {
+    #[fixture]
+    fn adapter() -> AdapterHandle {
         let client = Arc::new(Mutex::new(Client::new()));
+        AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned())
+    }
 
-        let mut adapter =
-            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
-
+    #[rstest]
+    #[tokio::test]
+    async fn test_add_device(mut adapter: AdapterHandle) {
         add_mock_device(&mut adapter, DEVICE_ID).await;
-
         assert!(adapter.get_device(DEVICE_ID).is_some())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_get_unknown_device() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let adapter =
-            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
-
+    async fn test_get_unknown_device(adapter: AdapterHandle) {
         assert!(adapter.get_device(DEVICE_ID).is_none())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_remove_device() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let mut adapter =
-            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
-
+    async fn test_remove_device(mut adapter: AdapterHandle) {
         add_mock_device(&mut adapter, DEVICE_ID).await;
 
-        client
+        adapter
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -395,23 +390,15 @@ pub(crate) mod tests {
         assert!(adapter.get_device(DEVICE_ID).is_none())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_remove_unknown_device() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let mut adapter =
-            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
-
+    async fn test_remove_unknown_device(mut adapter: AdapterHandle) {
         assert!(adapter.remove_device(DEVICE_ID).await.is_err())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_unload() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let adapter =
-            AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned());
-
+    async fn test_unload(adapter: AdapterHandle) {
         adapter
             .client
             .lock()

@@ -290,6 +290,7 @@ pub(crate) mod tests {
     };
     use async_trait::async_trait;
     use mockall::mock;
+    use rstest::{fixture, rstest};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -344,12 +345,10 @@ pub(crate) mod tests {
     const COMPLETED: &str = "completed";
     const INPUT: serde_json::Value = json!(null);
 
-    #[tokio::test]
-    async fn test_action_start() {
+    #[fixture]
+    fn action() -> ActionHandle<NoInput> {
         let client = Arc::new(Mutex::new(Client::new()));
-        let input = json!(null);
-
-        let mut action = ActionHandle::new(
+        ActionHandle::new(
             client.clone(),
             Weak::new(),
             PLUGIN_ID.to_owned(),
@@ -359,9 +358,15 @@ pub(crate) mod tests {
             ACTION_ID.to_owned(),
             NoInput,
             INPUT,
-        );
+        )
+    }
+    #[rstest]
+    #[tokio::test]
+    async fn test_action_start(mut action: ActionHandle<NoInput>) {
+        let input = json!(null);
 
-        client
+        action
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -384,23 +389,11 @@ pub(crate) mod tests {
         action.start().await.unwrap();
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_action_finish() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let mut action = ActionHandle::new(
-            client.clone(),
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            ACTION_NAME.to_owned(),
-            ACTION_ID.to_owned(),
-            NoInput,
-            INPUT,
-        );
-
-        client
+    async fn test_action_finish(mut action: ActionHandle<NoInput>) {
+        action
+            .client
             .lock()
             .await
             .expect_send_message()
