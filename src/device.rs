@@ -349,6 +349,7 @@ pub(crate) mod tests {
         events, properties,
         property::{tests::MockPropertyBuilder, Properties},
     };
+    use rstest::{fixture, rstest};
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
@@ -445,143 +446,65 @@ pub(crate) mod tests {
     const ACTION_NAME: &str = "action_name";
     const EVENT_NAME: &str = "event_name";
 
-    #[test]
-    fn test_get_property() {
+    #[fixture]
+    fn device() -> DeviceHandle {
         let client = Arc::new(Mutex::new(Client::new()));
-
         let device_description = DeviceDescription::default();
-
-        let mut device = DeviceHandle::new(
+        DeviceHandle::new(
             client,
             Weak::new(),
             PLUGIN_ID.to_owned(),
             ADAPTER_ID.to_owned(),
             DEVICE_ID.to_owned(),
             device_description,
-        );
+        )
+    }
 
+    #[rstest]
+    fn test_get_property(mut device: DeviceHandle) {
         device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
             PROPERTY_NAME.to_owned(),
         )));
-
         assert!(device.get_property(PROPERTY_NAME).is_some())
     }
 
-    #[test]
-    fn test_get_unknown_property() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let device = DeviceHandle::new(
-            client,
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    #[rstest]
+    fn test_get_unknown_property(device: DeviceHandle) {
         assert!(device.get_property(PROPERTY_NAME).is_none())
     }
 
-    #[test]
-    fn test_get_action() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let mut device = DeviceHandle::new(
-            client,
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    #[rstest]
+    fn test_get_action(mut device: DeviceHandle) {
         device.add_action(Box::new(MockAction::<NoInput>::new(ACTION_NAME.to_owned())));
-
         assert!(device.get_action(ACTION_NAME).is_some())
     }
 
-    #[test]
-    fn test_get_unknown_action() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let device = DeviceHandle::new(
-            client,
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    #[rstest]
+    fn test_get_unknown_action(device: DeviceHandle) {
         assert!(device.get_action(ACTION_NAME).is_none())
     }
 
-    #[test]
-    fn test_get_event() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let mut device = DeviceHandle::new(
-            client,
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    #[rstest]
+    fn test_get_event(mut device: DeviceHandle) {
         device.add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())));
-
         assert!(device.get_event(EVENT_NAME).is_some())
     }
 
-    #[test]
-    fn test_get_unknown_event() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let device = DeviceHandle::new(
-            client,
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    #[rstest]
+    fn test_get_unknown_event(device: DeviceHandle) {
         assert!(device.get_event(EVENT_NAME).is_none())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_set_property_value() {
+    async fn test_set_property_value(mut device: DeviceHandle) {
         let value = 42;
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let mut device = DeviceHandle::new(
-            client.clone(),
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
         device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
             PROPERTY_NAME.to_owned(),
         )));
 
-        client
+        device
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -593,46 +516,23 @@ pub(crate) mod tests {
             .is_ok());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_set_unknown_property_value() {
+    async fn test_set_unknown_property_value(device: DeviceHandle) {
         let value = 42;
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let device = DeviceHandle::new(
-            client.clone(),
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
         assert!(device
             .set_property_value(PROPERTY_NAME, Some(json!(value)))
             .await
             .is_err());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_raise_event() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let mut device = DeviceHandle::new(
-            client.clone(),
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    async fn test_raise_event(mut device: DeviceHandle) {
         device.add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())));
 
-        client
+        device
+            .client
             .lock()
             .await
             .expect_send_message()
@@ -641,21 +541,9 @@ pub(crate) mod tests {
         assert!(device.raise_event(EVENT_NAME, None).await.is_ok());
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_raise_unknown_event() {
-        let client = Arc::new(Mutex::new(Client::new()));
-
-        let device_description = DeviceDescription::default();
-
-        let device = DeviceHandle::new(
-            client.clone(),
-            Weak::new(),
-            PLUGIN_ID.to_owned(),
-            ADAPTER_ID.to_owned(),
-            DEVICE_ID.to_owned(),
-            device_description,
-        );
-
+    async fn test_raise_unknown_event(device: DeviceHandle) {
         assert!(device.raise_event(EVENT_NAME, None).await.is_err());
     }
 }
