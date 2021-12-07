@@ -546,8 +546,9 @@ mod tests {
             Adapter,
         },
         device::tests::MockDevice,
+        event::{EventHandle, NoData},
         plugin::{connect, Plugin},
-        property::{self, tests::MockProperty},
+        property::{self, tests::MockProperty, PropertyHandle},
     };
     use as_any::Downcast;
     use rstest::{fixture, rstest};
@@ -939,5 +940,65 @@ mod tests {
     async fn test_get_config_database(plugin: Plugin) {
         let db = plugin.get_config_database::<serde_json::Value>();
         assert_eq!(db.plugin_id, PLUGIN_ID);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_device_has_weak_adapter_ref(mut plugin: Plugin) {
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
+
+        assert!(device
+            .lock()
+            .await
+            .device_handle_mut()
+            .adapter
+            .upgrade()
+            .is_some())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_property_has_weak_device_ref(mut plugin: Plugin) {
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
+
+        let property = device
+            .lock()
+            .await
+            .device_handle_mut()
+            .get_property(MockDevice::PROPERTY_I32)
+            .unwrap();
+        assert!(property
+            .lock()
+            .await
+            .property_handle_mut()
+            .downcast_ref::<PropertyHandle<i32>>()
+            .unwrap()
+            .device
+            .upgrade()
+            .is_some())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_event_has_weak_device_ref(mut plugin: Plugin) {
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
+
+        let event = device
+            .lock()
+            .await
+            .device_handle_mut()
+            .get_event(MockDevice::EVENT_NODATA)
+            .unwrap();
+        assert!(event
+            .lock()
+            .await
+            .downcast_ref::<EventHandle<NoData>>()
+            .unwrap()
+            .device
+            .upgrade()
+            .is_some())
     }
 }
