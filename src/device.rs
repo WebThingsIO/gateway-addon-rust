@@ -180,6 +180,21 @@ impl DeviceHandle {
         action.check_and_perform(action_handle).await
     }
 
+    pub(crate) async fn remove_action(
+        &self,
+        action_name: String,
+        action_id: String,
+    ) -> Result<(), String> {
+        let action = self.get_action(&action_name).ok_or_else(|| {
+            format!(
+                "Failed to remove action {} ({}) of {}: not found",
+                action_name, action_id, self.device_id,
+            )
+        })?;
+        let mut action = action.lock().await;
+        action.cancel(action_id).await
+    }
+
     pub(crate) fn add_event(&mut self, event: Box<dyn EventBase>) {
         let name = event.name();
 

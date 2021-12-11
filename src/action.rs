@@ -72,6 +72,11 @@ pub trait Action: Send + Sync + 'static {
     /// Don't forget to call `action_handle.start()` and `action_handle.finish()`.
     async fn perform(&mut self, _action_handle: ActionHandle<Self::Input>) -> Result<(), String>;
 
+    /// Called when this action has been canceled through the gateway.
+    async fn cancel(&mut self, _action_id: String) -> Result<(), String> {
+        Err("Action does not implement canceling".to_owned())
+    }
+
     #[doc(hidden)]
     fn full_description(&self) -> FullActionDescription {
         self.description().into_full_description()
@@ -135,6 +140,9 @@ pub trait ActionBase: Send + Sync + AsAny + 'static {
         &mut self,
         action_handle: ActionHandle<serde_json::Value>,
     ) -> Result<(), String>;
+
+    #[doc(hidden)]
+    async fn cancel(&mut self, action_id: String) -> Result<(), String>;
 }
 
 impl Downcast for dyn ActionBase {}
@@ -154,6 +162,10 @@ impl<T: Action> ActionBase for T {
         action_handle: ActionHandle<serde_json::Value>,
     ) -> Result<(), String> {
         <T as Action>::check_and_perform(self, action_handle).await
+    }
+
+    async fn cancel(&mut self, action_id: String) -> Result<(), String> {
+        <T as Action>::cancel(self, action_id).await
     }
 }
 
@@ -299,6 +311,7 @@ pub(crate) mod tests {
     mock! {
         pub ActionHelper<T: Input> {
             pub fn perform(&mut self, action_handle: ActionHandle<T>) -> Result<(), String>;
+            pub fn cancel(&mut self, action_id: String) -> Result<(), String>;
         }
     }
 
@@ -334,6 +347,10 @@ pub(crate) mod tests {
         ) -> Result<(), String> {
             assert!(action_handle.device.upgrade().is_some());
             self.action_helper.perform(action_handle)
+        }
+
+        async fn cancel(&mut self, action_id: String) -> Result<(), String> {
+            self.action_helper.cancel(action_id)
         }
     }
 

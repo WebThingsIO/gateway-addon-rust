@@ -19,7 +19,8 @@ use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duratio
 use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
-    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRequestActionRequest,
+    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRemoveActionRequest,
+    DeviceRemoveActionResponseMessageData, DeviceRequestActionRequest,
     DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
     Message, Message as IPCMessage, PluginErrorNotificationMessageData, PluginUnloadRequest,
     PluginUnloadResponseMessageData, Preferences, UserProfile,
@@ -424,6 +425,73 @@ impl Plugin {
 
                 Ok(MessageResult::Continue)
             }
+            IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
+                message_type: _,
+                data: message,
+            }) => {
+                let adapter = self.borrow_adapter_(&message.adapter_id)?;
+
+                let device = adapter
+                    .lock()
+                    .await
+                    .adapter_handle_mut()
+                    .get_device(&message.device_id);
+
+                if let Some(device) = device {
+                    let mut device = device.lock().await;
+                    let device_id = message.device_id;
+                    let action_name = message.action_name;
+                    let action_id = message.action_id;
+                    if let Err(err) = device
+                        .device_handle_mut()
+                        .remove_action(action_name.clone(), action_id.clone())
+                        .await
+                    {
+                        let message = DeviceRemoveActionResponseMessageData {
+                            plugin_id: message.plugin_id,
+                            adapter_id: message.adapter_id,
+                            device_id: device_id.clone(),
+                            action_name: action_name.clone(),
+                            action_id: action_id.clone(),
+                            message_id: message.message_id,
+                            success: false,
+                        }
+                        .into();
+
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+
+                        return Err(format!(
+                            "Failed to remove action {} ({}) for device {}: {:?}",
+                            action_name, action_id, device_id, err
+                        ));
+                    } else {
+                        let message = DeviceRemoveActionResponseMessageData {
+                            plugin_id: message.plugin_id,
+                            adapter_id: message.adapter_id,
+                            device_id: device_id.clone(),
+                            action_name: action_name.clone(),
+                            action_id: action_id.clone(),
+                            message_id: message.message_id,
+                            success: false,
+                        }
+                        .into();
+
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+                    }
+                }
+
+                Ok(MessageResult::Continue)
+            }
             msg => Err(format!("Unexpected msg: {:?}", msg)),
         }
     }
@@ -558,9 +626,9 @@ mod tests {
     use webthings_gateway_ipc_types::{
         AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
         AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
-        DeviceRequestActionRequestMessageData, DeviceSavedNotificationMessageData,
-        DeviceSetPropertyCommandMessageData, DeviceWithoutId, Message,
-        PluginUnloadRequestMessageData,
+        DeviceRemoveActionRequestMessageData, DeviceRequestActionRequestMessageData,
+        DeviceSavedNotificationMessageData, DeviceSetPropertyCommandMessageData, DeviceWithoutId,
+        Message, PluginUnloadRequestMessageData,
     };
 
     async fn add_mock_adapter(
@@ -717,6 +785,65 @@ mod tests {
                         && msg.data.device_id == DEVICE_ID
                         && msg.data.action_name == action_name
                         && msg.data.action_id == ACTION_ID
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_request_action_cancel(mut plugin: Plugin) {
+        let message_id = 42;
+        let action_name = MockDevice::ACTION_I32.to_owned();
+        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
+        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
+
+        {
+            let mut device = device.lock().await;
+            let action = device
+                .device_handle_mut()
+                .get_action(action_name.to_owned())
+                .unwrap();
+            let mut action = action.lock().await;
+            let action = action
+                .as_any_mut()
+                .downcast_mut::<MockAction<i32>>()
+                .unwrap();
+            action
+                .action_helper
+                .expect_cancel()
+                .withf(move |action_id| action_id == ACTION_ID)
+                .times(1)
+                .returning(|_| Ok(()));
+        }
+
+        let message: Message = DeviceRemoveActionRequestMessageData {
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
+            device_id: DEVICE_ID.to_owned(),
+            action_name: action_name.to_owned(),
+            action_id: ACTION_ID.to_owned(),
+            message_id,
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DeviceRemoveActionResponse(msg) => {
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.action_name == action_name
+                        && msg.data.action_id == ACTION_ID
+                        && msg.data.message_id == message_id
                 }
                 _ => false,
             })
