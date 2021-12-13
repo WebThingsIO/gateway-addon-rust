@@ -12,6 +12,7 @@ pub mod action;
 mod action_description;
 pub mod adapter;
 pub mod api_error;
+pub mod api_handler;
 #[doc(hidden)]
 pub mod client;
 pub mod database;
@@ -40,6 +41,7 @@ pub mod prelude {
         actions,
         adapter::{Adapter, AdapterHandle},
         api_error::ApiError,
+        api_handler::{ApiHandler, ApiRequest, ApiResponse},
         database::Database,
         device::{Device, DeviceBuilder, DeviceDescription, DeviceHandle},
         event::{Event, EventDescription, EventHandle, Events},

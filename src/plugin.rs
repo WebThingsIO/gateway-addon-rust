@@ -9,17 +9,21 @@
 use crate::{
     adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
+    api_handler::{ApiHandler, ApiResponse},
     client::Client,
     database::Database,
 };
 use futures::prelude::*;
 use mockall_double::double;
 use serde::{de::DeserializeOwned, Serialize};
+use serde_json::json;
 use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
     AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
-    AdapterStartPairingCommand, AdapterUnloadRequest, DeviceRemoveActionRequest,
+    AdapterStartPairingCommand, AdapterUnloadRequest, ApiHandlerAddedNotificationMessageData,
+    ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, ApiHandlerUnloadRequest,
+    ApiHandlerUnloadResponseMessageData, DeviceRemoveActionRequest,
     DeviceRemoveActionResponseMessageData, DeviceRequestActionRequest,
     DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
     Message, Message as IPCMessage, PluginErrorNotificationMessageData, PluginUnloadRequest,
@@ -31,7 +35,9 @@ const DONT_RESTART_EXIT_CODE: i32 = 100;
 mod double {
     #[cfg(not(test))]
     pub mod plugin {
-        use crate::{api_error::ApiError, client::Client, plugin::Plugin};
+        use crate::{
+            api_error::ApiError, api_handler::NoopApiHandler, client::Client, plugin::Plugin,
+        };
         use futures::stream::{SplitStream, StreamExt};
         use std::{collections::HashMap, str::FromStr, sync::Arc};
         use tokio::{net::TcpStream, sync::Mutex};
@@ -89,6 +95,7 @@ mod double {
                 client: Arc::new(Mutex::new(client)),
                 stream,
                 adapters: HashMap::new(),
+                api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
             })
         }
 
@@ -111,7 +118,7 @@ mod double {
 
     #[cfg(test)]
     pub mod mock_plugin {
-        use crate::{client::Client, plugin::Plugin};
+        use crate::{api_handler::NoopApiHandler, client::Client, plugin::Plugin};
         use std::{collections::HashMap, sync::Arc};
         use tokio::sync::Mutex;
         use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
@@ -142,6 +149,7 @@ mod double {
                 client: client.clone(),
                 stream: (),
                 adapters: HashMap::new(),
+                api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
             }
         }
 
@@ -176,6 +184,7 @@ pub struct Plugin {
     pub(crate) client: Arc<Mutex<Client>>,
     stream: PluginStream,
     adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
+    api_handler: Arc<Mutex<dyn ApiHandler>>,
 }
 
 #[doc(hidden)]
@@ -275,6 +284,28 @@ impl Plugin {
                     .await
                     .adapter_handle_mut()
                     .unload()
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+
+                Ok(MessageResult::Continue)
+            }
+            IPCMessage::ApiHandlerUnloadRequest(ApiHandlerUnloadRequest {
+                message_type: _,
+                data: _message,
+            }) => {
+                log::info!("Received request to unload api handler");
+
+                self.api_handler.lock().await.on_unload().await;
+
+                let message: Message = ApiHandlerUnloadResponseMessageData {
+                    plugin_id: self.plugin_id.clone(),
+                    package_name: self.plugin_id.clone(),
+                }
+                .into();
+                self.client
+                    .lock()
+                    .await
+                    .send_message(&message)
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
 
@@ -492,6 +523,56 @@ impl Plugin {
 
                 Ok(MessageResult::Continue)
             }
+            IPCMessage::ApiHandlerApiRequest(ApiHandlerApiRequest {
+                message_type: _,
+                data: message,
+            }) => {
+                match self
+                    .api_handler
+                    .lock()
+                    .await
+                    .handle_request(message.request)
+                    .await
+                {
+                    Ok(response) => {
+                        let message = ApiHandlerApiResponseMessageData {
+                            message_id: message.message_id,
+                            package_name: self.plugin_id.clone(),
+                            plugin_id: self.plugin_id.clone(),
+                            response: response,
+                        }
+                        .into();
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+                    }
+                    Err(err) => {
+                        let message = ApiHandlerApiResponseMessageData {
+                            message_id: message.message_id,
+                            package_name: self.plugin_id.clone(),
+                            plugin_id: self.plugin_id.clone(),
+                            response: ApiResponse {
+                                content: serde_json::Value::String(err.clone()),
+                                content_type: json!("text/plain"),
+                                status: 500,
+                            },
+                        }
+                        .into();
+                        self.client
+                            .lock()
+                            .await
+                            .send_message(&message)
+                            .await
+                            .map_err(|err| format!("{:?}", err))?;
+                        return Err(format!("Error during api_handler.handle_request: {}", err));
+                    }
+                }
+
+                Ok(MessageResult::Continue)
+            }
             msg => Err(format!("Unexpected msg: {:?}", msg)),
         }
     }
@@ -569,6 +650,17 @@ impl Plugin {
         Ok(adapter)
     }
 
+    pub async fn set_api_handler<T: ApiHandler>(&mut self, api_handler: T) -> Result<(), ApiError> {
+        self.api_handler = Arc::new(Mutex::new(api_handler));
+        let message: Message = ApiHandlerAddedNotificationMessageData {
+            plugin_id: self.plugin_id.clone(),
+            package_name: self.plugin_id.clone(),
+        }
+        .into();
+        self.client.lock().await.send_message(&message).await?;
+        Ok(())
+    }
+
     /// Unload this plugin.
     pub async fn unload(&self) -> Result<(), ApiError> {
         let message: Message = PluginUnloadResponseMessageData {
@@ -613,19 +705,22 @@ mod tests {
             tests::{add_mock_device, MockAdapter},
             Adapter,
         },
+        api_handler::tests::MockApiHandler,
         device::tests::MockDevice,
         event::{EventHandle, NoData},
         plugin::{connect, Plugin},
         property::{self, tests::MockProperty, PropertyHandle},
+        ApiRequest, ApiResponse,
     };
     use as_any::Downcast;
     use rstest::{fixture, rstest};
     use serde_json::json;
-    use std::sync::Arc;
+    use std::{collections::BTreeMap, sync::Arc};
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{
         AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
         AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
+        ApiHandlerApiRequestMessageData, ApiHandlerUnloadRequestMessageData,
         DeviceRemoveActionRequestMessageData, DeviceRequestActionRequestMessageData,
         DeviceSavedNotificationMessageData, DeviceSetPropertyCommandMessageData, DeviceWithoutId,
         Message, PluginUnloadRequestMessageData,
@@ -656,6 +751,24 @@ mod tests {
             .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
             .await
             .unwrap()
+    }
+
+    async fn set_mock_api_handler(plugin: &mut Plugin) {
+        let plugin_id = plugin.plugin_id.to_owned();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::ApiHandlerAddedNotification(msg) => msg.data.plugin_id == plugin_id,
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.set_api_handler(MockApiHandler::new()).await.unwrap()
     }
 
     const PLUGIN_ID: &str = "plugin_id";
@@ -1128,5 +1241,98 @@ mod tests {
             .device
             .upgrade()
             .is_some())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_request_api_handler_unload(mut plugin: Plugin) {
+        set_mock_api_handler(&mut plugin).await;
+
+        let message: Message = ApiHandlerUnloadRequestMessageData {
+            plugin_id: PLUGIN_ID.to_owned(),
+            package_name: PLUGIN_ID.to_owned(),
+        }
+        .into();
+
+        plugin
+            .api_handler
+            .lock()
+            .await
+            .downcast_mut::<MockApiHandler>()
+            .unwrap()
+            .api_handler_helper
+            .expect_on_unload()
+            .times(1)
+            .returning(|| ());
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::ApiHandlerUnloadResponse(msg) => msg.data.plugin_id == PLUGIN_ID,
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_request_api_handler_handle_request(mut plugin: Plugin) {
+        set_mock_api_handler(&mut plugin).await;
+
+        let request = ApiRequest {
+            body: BTreeMap::new(),
+            method: "GET".to_owned(),
+            path: "/".to_string(),
+            query: BTreeMap::new(),
+        };
+        let expected_response = ApiResponse {
+            content: json!("foo"),
+            content_type: json!("text/plain"),
+            status: 200,
+        };
+        let message_id = 42;
+
+        let message: Message = ApiHandlerApiRequestMessageData {
+            plugin_id: PLUGIN_ID.to_owned(),
+            package_name: PLUGIN_ID.to_owned(),
+            message_id,
+            request: request.clone(),
+        }
+        .into();
+
+        let expected_response_clone = expected_response.clone();
+        plugin
+            .api_handler
+            .lock()
+            .await
+            .downcast_mut::<MockApiHandler>()
+            .unwrap()
+            .api_handler_helper
+            .expect_handle_request()
+            .withf(move |req| req.method == request.method && req.path == request.path)
+            .times(1)
+            .returning(move |_| Ok(expected_response_clone.clone()));
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::ApiHandlerApiResponse(msg) => {
+                    msg.data.plugin_id == PLUGIN_ID && msg.data.response == expected_response
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        plugin.handle_message(message).await.unwrap();
     }
 }
