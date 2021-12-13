@@ -539,7 +539,7 @@ impl Plugin {
                             message_id: message.message_id,
                             package_name: self.plugin_id.clone(),
                             plugin_id: self.plugin_id.clone(),
-                            response: response,
+                            response,
                         }
                         .into();
                         self.client
