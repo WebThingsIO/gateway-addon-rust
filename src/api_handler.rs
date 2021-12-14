@@ -4,19 +4,66 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+//! A module for everything related to WebthingsIO API Handlers.
+
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
-pub use webthings_gateway_ipc_types::{Request as ApiRequest, Response as ApiResponse};
+/// An [ApiHandler](crate::api_handler::ApiHandler) request.
+pub use webthings_gateway_ipc_types::Request as ApiRequest;
+/// An [ApiHandler](crate::api_handler::ApiHandler) response.
+pub use webthings_gateway_ipc_types::Response as ApiResponse;
 
+/// A trait used to specify the behaviour of a WebthingsIO API Handlers.
+///
+/// An API Handler allows you to provide custom routes at `/extensions/<plugin-id>/api/`.
+///
+/// # Examples
+/// ```no_run
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use async_trait::async_trait;
+/// # use serde_json::json;
+/// struct ExampleApiHandler();
+///
+/// #[async_trait]
+/// impl ApiHandler for ExampleApiHandler {
+///     async fn handle_request(&mut self, request: ApiRequest) -> Result<ApiResponse, String> {
+///         match request.path.as_ref() {
+///             "/example-route" => Ok(ApiResponse {
+///                 content: json!("foo"),
+///                 content_type: json!("text/plain"),
+///                 status: 200,
+///             }),
+///             _ => Err("unknown route".to_owned())
+///         }
+///     }
+/// }
+///
+/// # impl ExampleApiHandler {
+/// #   pub fn new() -> Self {
+/// #       Self()
+/// #   }
+/// # }
+/// #
+/// # #[tokio::main]
+/// pub async fn main() -> Result<(), ApiError> {
+///     let mut plugin = connect("example-addon").await?;
+///     plugin.set_api_handler(ExampleApiHandler::new()).await?;
+///     plugin.event_loop().await;
+///     Ok(())
+/// }
+/// ```
 #[async_trait]
 pub trait ApiHandler: Send + Sync + AsAny + 'static {
+    /// Called when this API Handler should be unloaded.
     async fn on_unload(&mut self) {}
+
+    /// Called when a route at `/extensions/<plugin-id>/api/` was requested.
     async fn handle_request(&mut self, request: ApiRequest) -> Result<ApiResponse, String>;
 }
 
 impl Downcast for dyn ApiHandler {}
 
-pub struct NoopApiHandler;
+pub(crate) struct NoopApiHandler;
 
 impl NoopApiHandler {
     pub fn new() -> Self {

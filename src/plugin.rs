@@ -650,6 +650,7 @@ impl Plugin {
         Ok(adapter)
     }
 
+    /// Set a new active [ApiHandler](crate::api_handler::ApiHandler).
     pub async fn set_api_handler<T: ApiHandler>(&mut self, api_handler: T) -> Result<(), ApiError> {
         self.api_handler = Arc::new(Mutex::new(api_handler));
         let message: Message = ApiHandlerAddedNotificationMessageData {
