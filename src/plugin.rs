@@ -477,7 +477,7 @@ impl Plugin {
                             action_name: action_name.clone(),
                             action_id: action_id.clone(),
                             message_id: message.message_id,
-                            success: false,
+                            success: true,
                         }
                         .into();
 
@@ -844,6 +844,7 @@ mod tests {
                         && msg.data.action_name == action_name
                         && msg.data.action_id == ACTION_ID
                         && msg.data.message_id == message_id
+                        && msg.data.success == true
                 }
                 _ => false,
             })
