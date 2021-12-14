@@ -24,7 +24,9 @@ use std::{
     sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::Device as FullDeviceDescription;
+use webthings_gateway_ipc_types::{
+    Device as FullDeviceDescription, DeviceConnectedStateNotificationMessageData, Message,
+};
 
 /// A trait used to specify the behaviour of a WoT device.
 ///
@@ -62,6 +64,7 @@ pub struct DeviceHandle {
     pub adapter_id: String,
     pub device_id: String,
     pub description: DeviceDescription,
+    pub connected: bool,
     properties: HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>>,
     actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
     events: HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>>,
@@ -84,6 +87,7 @@ impl DeviceHandle {
             adapter_id,
             description,
             device_id,
+            connected: true,
             properties: HashMap::new(),
             actions: HashMap::new(),
             events: HashMap::new(),
@@ -227,6 +231,21 @@ impl DeviceHandle {
             Err(ApiError::UnknownEvent(name))
         }
     }
+
+    /// Set the connected state of this device and notify the gateway.
+    pub async fn set_connected(&mut self, connected: bool) -> Result<(), ApiError> {
+        self.connected = connected;
+
+        let message: Message = DeviceConnectedStateNotificationMessageData {
+            plugin_id: self.plugin_id.clone(),
+            adapter_id: self.adapter_id.clone(),
+            device_id: self.device_id.clone(),
+            connected,
+        }
+        .into();
+
+        self.client.lock().await.send_message(&message).await
+    }
 }
 
 /// A trait used to specify the structure of a WoT device.
@@ -353,6 +372,7 @@ pub(crate) mod tests {
     use serde_json::json;
     use std::sync::{Arc, Weak};
     use tokio::sync::Mutex;
+    use webthings_gateway_ipc_types::Message;
 
     pub struct MockDevice {
         device_handle: DeviceHandle,
@@ -545,5 +565,31 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_raise_unknown_event(device: DeviceHandle) {
         assert!(device.raise_event(EVENT_NAME, None).await.is_err());
+    }
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    #[tokio::test]
+    async fn test_set_connected(mut device: DeviceHandle, #[case] connected: bool) {
+        device
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| match msg {
+                Message::DeviceConnectedStateNotification(msg) => {
+                    msg.data.plugin_id == PLUGIN_ID
+                        && msg.data.adapter_id == ADAPTER_ID
+                        && msg.data.device_id == DEVICE_ID
+                        && msg.data.connected == connected
+                }
+                _ => false,
+            })
+            .times(1)
+            .returning(|_| Ok(()));
+
+        assert!(device.set_connected(connected).await.is_ok());
+        assert_eq!(device.connected, connected);
     }
 }
