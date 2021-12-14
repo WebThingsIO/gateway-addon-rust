@@ -295,7 +295,12 @@ impl Plugin {
             }) => {
                 log::info!("Received request to unload api handler");
 
-                self.api_handler.lock().await.on_unload().await;
+                self.api_handler
+                    .lock()
+                    .await
+                    .on_unload()
+                    .await
+                    .map_err(|err| format!("Could not unload api handler: {}", err))?;
 
                 let message: Message = ApiHandlerUnloadResponseMessageData {
                     plugin_id: self.plugin_id.clone(),
@@ -1264,7 +1269,7 @@ mod tests {
             .api_handler_helper
             .expect_on_unload()
             .times(1)
-            .returning(|| ());
+            .returning(|| Ok(()));
 
         plugin
             .client

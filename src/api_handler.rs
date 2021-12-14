@@ -55,7 +55,9 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 #[async_trait]
 pub trait ApiHandler: Send + Sync + AsAny + 'static {
     /// Called when this API Handler should be unloaded.
-    async fn on_unload(&mut self) {}
+    async fn on_unload(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 
     /// Called when a route at `/extensions/<plugin-id>/api/` was requested.
     async fn handle_request(&mut self, request: ApiRequest) -> Result<ApiResponse, String>;
@@ -86,7 +88,7 @@ pub(crate) mod tests {
 
     mock! {
         pub ApiHandlerHelper {
-            pub async fn on_unload(&mut self);
+            pub async fn on_unload(&mut self) -> Result<(), String>;
             pub async fn handle_request(&mut self, request: ApiRequest) -> Result<ApiResponse, String>;
         }
     }
@@ -105,7 +107,7 @@ pub(crate) mod tests {
 
     #[async_trait]
     impl ApiHandler for MockApiHandler {
-        async fn on_unload(&mut self) {
+        async fn on_unload(&mut self) -> Result<(), String> {
             self.api_handler_helper.on_unload().await
         }
 
