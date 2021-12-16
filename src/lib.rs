@@ -16,7 +16,6 @@ pub mod api_handler;
 pub mod client;
 pub mod database;
 pub mod device;
-mod device_description;
 pub mod event;
 #[cfg(not(test))]
 #[doc(hidden)]

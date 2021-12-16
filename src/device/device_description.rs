@@ -5,7 +5,6 @@
  */
 
 use std::collections::BTreeMap;
-
 use webthings_gateway_ipc_types::{
     Action as FullActionDescription, Device as FullDeviceDescription, DevicePin,
     Event as FullEventDescription, Link, Property as FullPropertyDescription,
