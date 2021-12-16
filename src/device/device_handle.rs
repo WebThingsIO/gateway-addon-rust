@@ -77,7 +77,7 @@ impl DeviceHandle {
         self.properties.insert(name, property);
     }
 
-    /// Get a reference to all the [properties][crate::property::Property] which this device owns.
+    /// Get a reference to all the [properties][crate::Property] which this device owns.
     pub fn properties(&self) -> &HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>> {
         &self.properties
     }
@@ -90,7 +90,7 @@ impl DeviceHandle {
         self.properties.get(&name.into()).cloned()
     }
 
-    /// Helper method for setting the value of a [property][crate::property::Property] which this device owns by ID.
+    /// Helper method for setting the value of a [property][crate::Property] which this device owns by ID.
     ///
     /// Make sure that the type of the provided value is compatible with the respective property.
     pub async fn set_property_value(
@@ -121,7 +121,7 @@ impl DeviceHandle {
         &self.actions
     }
 
-    /// Get an [action][crate::action::Action] which this device owns by ID.
+    /// Get an [action][crate::Action] which this device owns by ID.
     pub fn get_action(&self, name: impl Into<String>) -> Option<Arc<Mutex<Box<dyn ActionBase>>>> {
         self.actions.get(&name.into()).cloned()
     }
@@ -190,7 +190,7 @@ impl DeviceHandle {
         &self.events
     }
 
-    /// Get an [event][crate::event::Event] which this device owns by ID.
+    /// Get an [event][crate::Event] which this device owns by ID.
     pub fn get_event(
         &self,
         name: impl Into<String>,

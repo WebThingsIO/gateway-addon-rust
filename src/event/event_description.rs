@@ -10,7 +10,7 @@ use webthings_gateway_ipc_types::{Event as FullEventDescription, Link};
 
 /// A struct which represents a WoT [event description][webthings_gateway_ipc_types::Event].
 ///
-/// This is used by [Event][crate::event::Event].
+/// This is used by [Event][crate::Event].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///

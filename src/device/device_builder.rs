@@ -15,7 +15,7 @@ use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 /// A trait used to specify the structure of a WoT device.
 ///
-/// Builds a [Device] instance. Created through an [adapter][crate::adapter::Adapter].
+/// Builds a [Device] instance. Created through an [adapter][crate::Adapter].
 ///
 /// # Examples
 /// ```
@@ -64,26 +64,26 @@ pub trait DeviceBuilder: Send + Sync + 'static {
     /// [WoT description][DeviceDescription] of the device.
     fn description(&self) -> DeviceDescription;
 
-    /// A list of [properties][crate::property::PropertyBuilder] this device should own.
+    /// A list of [properties][crate::PropertyBuilder] this device should own.
     ///
     /// Note that the desired list consists of boxed objects implementing [PropertyBuilderBase][crate::property::PropertyBuilderBase].
-    /// You can use the convenienve macro [properties!][crate::properties] to create this list [PropertyBuilder][crate::property::PropertyBuilder]s.
+    /// You can use the convenienve macro [properties!][crate::properties] to create this list [PropertyBuilder][crate::PropertyBuilder]s.
     fn properties(&self) -> Properties {
         properties![]
     }
 
-    /// A list of [actions][crate::action::Action] this device should own.
+    /// A list of [actions][crate::Action] this device should own.
     ///
     /// Note that the desired list consists of boxed objects implementing [ActionBase][crate::action::ActionBase].
-    /// You can use the convenienve macro [actions!][crate::actions] to create this list from [Action][crate::action::Action]s.
+    /// You can use the convenienve macro [actions!][crate::actions] to create this list from [Action][crate::Action]s.
     fn actions(&self) -> Actions {
         actions![]
     }
 
-    /// A list of [events][crate::event::Event] this device should own.
+    /// A list of [events][crate::Event] this device should own.
     ///
     /// Note that the desired list consists of boxed objects implementing [EventBase][crate::event::EventBase].
-    /// You can use the convenienve macro [events!][crate::events] to create this list from [Event][crate::event::Event]s.
+    /// You can use the convenienve macro [events!][crate::events] to create this list from [Event][crate::Event]s.
     fn events(&self) -> Events {
         events![]
     }

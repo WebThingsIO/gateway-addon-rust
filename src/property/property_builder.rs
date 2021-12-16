@@ -52,7 +52,7 @@ pub trait PropertyBuilder: Send + Sync + 'static {
     /// Name of the property.
     fn name(&self) -> String;
 
-    /// [WoT description][PropertyDescription] of the property.
+    /// [WoT description][crate::PropertyDescription] of the property.
     fn description(&self) -> crate::PropertyDescription<Self::Value>;
 
     /// Build a new instance of this property using the given [property handle][PropertyHandle].

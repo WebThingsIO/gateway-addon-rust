@@ -11,7 +11,7 @@ use webthings_gateway_ipc_types::{Action as FullActionDescription, Link};
 
 /// A struct which represents a WoT [action description][webthings_gateway_ipc_types::Action].
 ///
-/// This is used by [Action][crate::action::Action].
+/// This is used by [Action][crate::Action].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///

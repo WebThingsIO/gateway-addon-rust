@@ -13,7 +13,7 @@ use async_trait::async_trait;
 
 /// A trait used to specify the behaviour of a WoT property.
 ///
-/// Wraps a [property handle][PropertyHandle] and defines how to react on gateway requests. Built by a [PropertyBuilder].
+/// Wraps a [property handle][PropertyHandle] and defines how to react on gateway requests. Built by a [crate::PropertyBuilder].
 ///
 /// # Examples
 /// ```

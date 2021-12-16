@@ -10,7 +10,7 @@ use async_trait::async_trait;
 
 /// A trait used to specify the behaviour of a WoT device.
 ///
-/// Wraps a [device handle][DeviceHandle] and defines how to react on gateway requests. Built by a [device builder][DeviceBuilder].
+/// Wraps a [device handle][DeviceHandle] and defines how to react on gateway requests. Built by a [device builder][crate::DeviceBuilder].
 ///
 /// # Examples
 /// ```

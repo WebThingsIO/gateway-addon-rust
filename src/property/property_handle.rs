@@ -20,7 +20,7 @@ use webthings_gateway_ipc_types::{DevicePropertyChangedNotificationMessageData, 
 #[derive(Clone)]
 pub struct PropertyHandle<T: Value> {
     client: Arc<Mutex<Client>>,
-    /// Reference to the [device][crate::device::Device] which owns this property.
+    /// Reference to the [device][crate::Device] which owns this property.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,

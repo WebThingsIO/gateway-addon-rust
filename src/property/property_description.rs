@@ -10,7 +10,7 @@ use webthings_gateway_ipc_types::{Link, Property as FullPropertyDescription};
 
 /// A struct which represents a WoT [property description][webthings_gateway_ipc_types::Property].
 ///
-/// This is used by [PropertyBuilder][crate::property::PropertyBuilder].
+/// This is used by [PropertyBuilder][crate::PropertyBuilder].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///

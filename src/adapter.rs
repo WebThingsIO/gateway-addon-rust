@@ -22,7 +22,7 @@ use webthings_gateway_ipc_types::{
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
-/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::plugin::Plugin].
+/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::Plugin].
 ///
 /// # Examples
 /// ```no_run
@@ -79,7 +79,7 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
     /// Return the wrapped [adapter handle][AdapterHandle].
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
-    /// Called when a new [device][crate::device::Device] was saved within the gateway.
+    /// Called when a new [device][crate::Device] was saved within the gateway.
     ///
     /// This happens when a thing was added through the add things view.
     async fn on_device_saved(
@@ -104,7 +104,7 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
         Ok(())
     }
 
-    /// Called when a previously saved [device][crate::device::Device] was removed.
+    /// Called when a previously saved [device][crate::Device] was removed.
     ///
     /// This happens when an added thing was removed through the gateway.
     async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
@@ -137,7 +137,7 @@ impl AdapterHandle {
         }
     }
 
-    /// Build and add a new device using the given [device builder][crate::device::DeviceBuilder].
+    /// Build and add a new device using the given [device builder][crate::DeviceBuilder].
     pub async fn add_device<D, B>(
         &mut self,
         device_builder: B,
@@ -199,12 +199,12 @@ impl AdapterHandle {
         Ok(device)
     }
 
-    /// Get a reference to all the [devices][crate::device::Device] which this adapter owns.
+    /// Get a reference to all the [devices][crate::Device] which this adapter owns.
     pub fn devices(&self) -> &HashMap<String, Arc<Mutex<Box<dyn Device>>>> {
         &self.devices
     }
 
-    /// Get a [device][crate::device::Device] which this adapter owns by ID.
+    /// Get a [device][crate::Device] which this adapter owns by ID.
     pub fn get_device(&self, id: impl Into<String>) -> Option<Arc<Mutex<Box<dyn Device>>>> {
         self.devices.get(&id.into()).cloned()
     }

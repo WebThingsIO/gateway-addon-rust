@@ -21,7 +21,7 @@ use webthings_gateway_ipc_types::DeviceActionStatusNotificationMessageData;
 #[derive(Clone)]
 pub struct ActionHandle<T: Input> {
     pub(crate) client: Arc<Mutex<Client>>,
-    /// Reference to the [device][crate::device::Device] which owns this action.
+    /// Reference to the [device][crate::Device] which owns this action.
     pub device: Weak<Mutex<Box<dyn Device>>>,
     pub plugin_id: String,
     pub adapter_id: String,
