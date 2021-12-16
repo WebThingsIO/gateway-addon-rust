@@ -14,7 +14,7 @@ use serde_json::json;
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, type_::Type, property::{AtType, Value}};
+/// # use gateway_addon_rust::{prelude::*, type_::Type, property::{AtType, Value}, api_error::ApiError};
 /// # use serde::de::Error;
 /// #[derive(Clone, Default)]
 /// struct Level(i32);

@@ -15,7 +15,7 @@ use serde_json::json;
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*,  action::{AtType, Input}};
+/// # use gateway_addon_rust::{prelude::*,  action::{AtType, Input}, api_error::ApiError};
 /// # use serde_json::json;
 /// # use serde::{de::Error, Deserialize};
 /// #[derive(Clone)]

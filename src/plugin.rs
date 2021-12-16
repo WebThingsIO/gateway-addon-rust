@@ -603,7 +603,7 @@ impl Plugin {
     ///
     /// # Examples
     /// ```no_run
-    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter};
+    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter, api_error::ApiError};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), ApiError> {
     /// #   let mut plugin = connect("example-addon").await?;

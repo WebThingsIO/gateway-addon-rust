@@ -26,7 +26,7 @@ use webthings_gateway_ipc_types::{
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, api_error::ApiError};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
@@ -220,7 +220,7 @@ impl AdapterHandle {
         self.client.lock().await.send_message(&message).await
     }
 
-    /// Remove a [device][crate::device::Device] which this adapter owns by ID.
+    /// Remove a [device][crate::Device] which this adapter owns by ID.
     pub async fn remove_device(&mut self, device_id: impl Into<String>) -> Result<(), ApiError> {
         let device_id = device_id.into();
         if self.devices.remove(&device_id).is_none() {

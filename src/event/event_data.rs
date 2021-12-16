@@ -13,7 +13,7 @@ use serde::{ser::Error, Serialize};
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, type_::Type, event::{AtType, Data}};
+/// # use gateway_addon_rust::{prelude::*, type_::Type, event::{AtType, Data}, api_error::ApiError};
 /// # use serde_json::json;
 /// # use serde::{de::Error, Deserialize};
 /// #[derive(Clone)]

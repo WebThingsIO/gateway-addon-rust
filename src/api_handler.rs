@@ -19,7 +19,10 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use gateway_addon_rust::{
+/// #     prelude::*, plugin::connect, example::ExampleDeviceBuilder,
+/// #     api_handler::{ApiHandler, ApiRequest, ApiResponse}
+/// # };
 /// # use async_trait::async_trait;
 /// # use serde_json::json;
 /// struct ExampleApiHandler();
