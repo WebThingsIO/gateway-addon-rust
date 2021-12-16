@@ -9,7 +9,7 @@ use crate::{
     actions,
     adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
-    event_description::NoData,
+    event::NoData,
     events,
     plugin::connect,
     properties, Action, ActionDescription, ActionHandle, Actions, Device, DeviceBuilder,

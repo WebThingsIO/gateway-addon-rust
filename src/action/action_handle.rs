@@ -124,7 +124,7 @@ impl ToString for Status {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use crate::{
         action::{NoInput},
         client::Client,

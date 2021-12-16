@@ -18,7 +18,6 @@ pub mod database;
 pub mod device;
 mod device_description;
 pub mod event;
-mod event_description;
 #[cfg(not(test))]
 #[doc(hidden)]
 pub mod example;

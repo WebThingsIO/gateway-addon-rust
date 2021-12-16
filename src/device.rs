@@ -378,8 +378,7 @@ pub(crate) mod tests {
         client::Client,
         device::{Device, DeviceBuilder, DeviceHandle},
         device_description::DeviceDescription,
-        event::{tests::MockEvent, Events},
-        event_description::NoData,
+        event::{tests::MockEvent, Events, NoData},
         events, properties,
         property::{tests::MockPropertyBuilder, Properties},
     };

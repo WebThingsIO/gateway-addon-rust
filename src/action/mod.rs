@@ -38,5 +38,4 @@ macro_rules! actions [
 #[cfg(test)]
 pub(crate) mod tests {
     pub use super::action_trait::tests::*;
-    pub use super::action_handle::tests::*;
 }

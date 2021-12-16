@@ -9,8 +9,6 @@ use schemars::{schema_for, JsonSchema};
 use serde::de::{DeserializeOwned, Error};
 use serde_json::json;
 
-
-
 /// A trait which converts WoT [types][crate::type_::Type] to Rust types.
 ///
 /// Already implemented for common Rust types. You may want to implement [SimpleInput] instead of this.
