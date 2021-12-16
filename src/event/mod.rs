@@ -6,23 +6,15 @@
 
 //! A module for everything related to WoT events.
 
-mod event_trait;
+mod event_data;
 mod event_description;
 mod event_handle;
-mod event_data;
+mod event_trait;
 
-pub use event_trait::*;
+pub use event_data::*;
 pub use event_description::*;
 pub use event_handle::*;
-pub use event_data::*;
-
-
-
-
-
-
-
-
+pub use event_trait::*;
 
 /// Convenience type for a collection of [EventBase].
 pub type Events = Vec<Box<dyn EventBase>>;

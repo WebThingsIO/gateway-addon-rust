@@ -5,16 +5,10 @@
  */
 
 use crate::{
-    action::NoInput,
-    actions,
-    adapter::{Adapter, AdapterHandle},
-    api_error::ApiError,
-    event::NoData,
-    events,
-    plugin::connect,
-    properties, Action, ActionDescription, ActionHandle, Actions, Device, DeviceBuilder,
-    DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
-    PropertyBuilder, PropertyDescription, PropertyHandle,
+    action::NoInput, actions, api_error::ApiError, event::NoData, events, plugin::connect,
+    properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
+    DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
+    Property, PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use as_any::Downcast;
 use async_trait::async_trait;

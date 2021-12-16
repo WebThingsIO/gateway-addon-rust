@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, client::Client, device::Device, event::Data, EventDescription};
+use crate::{api_error::ApiError, client::Client, event::Data, Device, EventDescription};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};

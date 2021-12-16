@@ -6,15 +6,15 @@
 
 //! A module for everything related to WoT actions.
 
-mod action_trait;
 mod action_description;
 mod action_handle;
 mod action_input;
+mod action_trait;
 
-pub use action_trait::*;
 pub use action_description::*;
 pub use action_handle::*;
 pub use action_input::*;
+pub use action_trait::*;
 
 /// Convenience type for a collection of [ActionBase].
 pub type Actions = Vec<Box<dyn ActionBase>>;

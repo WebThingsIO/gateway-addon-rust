@@ -7,8 +7,6 @@
 use crate::{api_error::ApiError, type_::Type, EventDescription};
 use serde::{ser::Error, Serialize};
 
-
-
 /// A trait which converts Rust types to WoT [types][crate::type_::Type].
 ///
 /// Already implemented for common Rust types. You may want to implement [SimpleData] instead of this.

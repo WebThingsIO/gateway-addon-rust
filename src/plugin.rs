@@ -7,11 +7,11 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
     api_handler::{ApiHandler, ApiResponse},
     client::Client,
     database::Database,
+    Adapter, AdapterHandle,
 };
 use futures::prelude::*;
 use mockall_double::double;
@@ -35,9 +35,7 @@ const DONT_RESTART_EXIT_CODE: i32 = 100;
 mod double {
     #[cfg(not(test))]
     pub mod plugin {
-        use crate::{
-            api_error::ApiError, api_handler::NoopApiHandler, client::Client, plugin::Plugin,
-        };
+        use crate::{api_error::ApiError, api_handler::NoopApiHandler, client::Client, Plugin};
         use futures::stream::{SplitStream, StreamExt};
         use std::{collections::HashMap, str::FromStr, sync::Arc};
         use tokio::{net::TcpStream, sync::Mutex};
@@ -118,7 +116,7 @@ mod double {
 
     #[cfg(test)]
     pub mod mock_plugin {
-        use crate::{api_handler::NoopApiHandler, client::Client, plugin::Plugin};
+        use crate::{api_handler::NoopApiHandler, client::Client, Plugin};
         use std::{collections::HashMap, sync::Arc};
         use tokio::sync::Mutex;
         use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
@@ -707,16 +705,13 @@ impl Plugin {
 mod tests {
     use crate::{
         action::{tests::MockAction, Input, NoInput},
-        adapter::{
-            tests::{add_mock_device, MockAdapter},
-            Adapter,
-        },
-        api_handler::tests::MockApiHandler,
+        adapter::tests::{add_mock_device, MockAdapter},
+        api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
         device::tests::MockDevice,
-        event::{EventHandle, NoData},
-        plugin::{connect, Plugin},
-        property::{self, tests::MockProperty, PropertyHandle},
-        ApiRequest, ApiResponse,
+        event::NoData,
+        plugin::connect,
+        property::{self, tests::MockProperty},
+        Adapter, EventHandle, Plugin, PropertyHandle,
     };
     use as_any::Downcast;
     use rstest::{fixture, rstest};

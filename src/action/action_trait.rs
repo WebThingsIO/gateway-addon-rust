@@ -4,18 +4,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    action::Input, ActionDescription, ActionHandle,
-};
+use crate::{action::Input, ActionDescription, ActionHandle};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 
 use jsonschema::JSONSchema;
 
-
-use webthings_gateway_ipc_types::{
-    Action as FullActionDescription,
-};
+use webthings_gateway_ipc_types::Action as FullActionDescription;
 
 /// A trait used to specify the structure and behaviour of a WoT action.
 ///
@@ -167,17 +162,9 @@ impl<T: Action> ActionBase for T {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{
-        action::{Input},
-        Action, ActionDescription, ActionHandle,
-    };
+    use crate::{action::Input, Action, ActionDescription, ActionHandle};
     use async_trait::async_trait;
     use mockall::mock;
-    
-    
-    
-    
-    
 
     mock! {
         pub ActionHelper<T: Input> {

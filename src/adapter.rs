@@ -6,11 +6,7 @@
 
 //! A module for everything related to WebthingsIO adapters.
 
-use crate::{
-    api_error::ApiError,
-    client::Client,
-    device::{self, Device, DeviceBuilder},
-};
+use crate::{api_error::ApiError, client::Client, device, Device, DeviceBuilder};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -245,9 +241,8 @@ impl AdapterHandle {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        adapter::{Adapter, AdapterHandle},
-        client::Client,
-        device::{tests::MockDeviceBuilder, Device, DeviceBuilder},
+        client::Client, device::tests::MockDeviceBuilder, Adapter, AdapterHandle, Device,
+        DeviceBuilder,
     };
     use async_trait::async_trait;
     use mockall::mock;

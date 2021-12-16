@@ -23,7 +23,6 @@ pub mod event;
 pub mod example;
 pub mod plugin;
 pub mod property;
-mod property_description;
 pub mod type_;
 
 /// The purpose of this module is to condense imports almost every addon requires.
@@ -38,9 +37,6 @@ pub mod prelude {
         action::{self, Action, ActionDescription, ActionHandle, Actions},
         actions,
         adapter::{Adapter, AdapterHandle},
-        api_error::ApiError,
-        api_handler::{ApiHandler, ApiRequest, ApiResponse},
-        database::Database,
         device::{Device, DeviceBuilder, DeviceDescription, DeviceHandle},
         event::{self, Event, EventDescription, EventHandle, Events},
         events,

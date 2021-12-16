@@ -82,7 +82,7 @@ impl ApiHandler for NoopApiHandler {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{ApiHandler, ApiRequest, ApiResponse};
+    use crate::api_handler::{ApiHandler, ApiRequest, ApiResponse};
     use async_trait::async_trait;
     use mockall::mock;
 

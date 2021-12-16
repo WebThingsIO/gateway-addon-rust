@@ -5,18 +5,13 @@
  */
 
 use crate::{
-    api_error::ApiError, client::Client, device::Device, event::Data, EventDescription, EventHandle,
+    api_error::ApiError, client::Client, event::Data, Device, EventDescription, EventHandle,
 };
 use as_any::{AsAny, Downcast};
 
-
-use std::{
-    sync::{Arc, Weak},
-};
+use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{
-    Event as FullEventDescription,
-};
+use webthings_gateway_ipc_types::Event as FullEventDescription;
 
 use super::EventHandleBase;
 
@@ -146,16 +141,9 @@ impl<T: Event> EventBase for T {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{
-        event::{Data},
-        Event, EventDescription,
-    };
-    
-    use std::{
-        marker::PhantomData,
-    };
-    
-    
+    use crate::{event::Data, Event, EventDescription};
+
+    use std::marker::PhantomData;
 
     pub struct MockEvent<T: Data> {
         event_name: String,

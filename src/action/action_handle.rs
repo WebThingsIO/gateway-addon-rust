@@ -6,7 +6,6 @@
 
 use crate::{action::Input, api_error::ApiError, client::Client, Device};
 
-
 use chrono::{DateTime, Utc};
 
 use std::{
@@ -14,9 +13,7 @@ use std::{
     time::SystemTime,
 };
 use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{
-    DeviceActionStatusNotificationMessageData,
-};
+use webthings_gateway_ipc_types::DeviceActionStatusNotificationMessageData;
 
 /// A struct which represents an instance of a WoT action.
 ///
@@ -125,13 +122,8 @@ impl ToString for Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        action::{NoInput},
-        client::Client,
-        ActionHandle,
-    };
-    
-    
+    use crate::{action::NoInput, client::Client, ActionHandle};
+
     use rstest::{fixture, rstest};
     use serde_json::json;
     use std::sync::{Arc, Weak};
