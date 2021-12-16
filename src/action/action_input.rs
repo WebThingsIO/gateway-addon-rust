@@ -309,8 +309,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_bool() {
-        assert_eq!(bool::deserialize(json!(true)).unwrap(), true);
-        assert_eq!(bool::deserialize(json!(false)).unwrap(), false);
+        assert!(bool::deserialize(json!(true)).unwrap());
+        assert!(!bool::deserialize(json!(false)).unwrap());
         assert!(bool::deserialize(json!(null)).is_err());
         assert!(bool::deserialize(json!(21)).is_err());
     }

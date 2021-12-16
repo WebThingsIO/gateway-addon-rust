@@ -348,7 +348,7 @@ pub(crate) mod tests {
     #[fixture]
     fn adapter() -> AdapterHandle {
         let client = Arc::new(Mutex::new(Client::new()));
-        AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned())
+        AdapterHandle::new(client, PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned())
     }
 
     #[rstest]

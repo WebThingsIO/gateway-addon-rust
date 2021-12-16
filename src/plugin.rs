@@ -146,7 +146,7 @@ mod double {
                 plugin_id: plugin_id.into(),
                 preferences,
                 user_profile,
-                client: client.clone(),
+                client,
                 stream: (),
                 adapters: HashMap::new(),
                 api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
@@ -754,7 +754,7 @@ mod tests {
             .returning(|_| Ok(()));
 
         plugin
-            .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
+            .create_adapter(adapter_id, adapter_id, MockAdapter::new)
             .await
             .unwrap()
     }
@@ -963,7 +963,7 @@ mod tests {
                         && msg.data.action_name == action_name
                         && msg.data.action_id == ACTION_ID
                         && msg.data.message_id == message_id
-                        && msg.data.success == true
+                        && msg.data.success
                 }
                 _ => false,
             })
@@ -1100,7 +1100,7 @@ mod tests {
         let message: Message = AdapterStartPairingCommandMessageData {
             plugin_id: PLUGIN_ID.to_owned(),
             adapter_id: ADAPTER_ID.to_owned(),
-            timeout: timeout,
+            timeout,
         }
         .into();
 

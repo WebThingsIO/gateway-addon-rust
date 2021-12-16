@@ -566,8 +566,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_bool() {
-        assert_eq!(bool::deserialize(Some(json!(true))).unwrap(), true);
-        assert_eq!(bool::deserialize(Some(json!(false))).unwrap(), false);
+        assert!(bool::deserialize(Some(json!(true))).unwrap());
+        assert!(!bool::deserialize(Some(json!(false))).unwrap());
         assert!(bool::deserialize(None).is_err());
         assert!(bool::deserialize(Some(json!(null))).is_err());
         assert!(bool::deserialize(Some(json!(21))).is_err());
@@ -644,7 +644,7 @@ mod tests {
     fn test_deserialize_veci32() {
         assert_eq!(
             Vec::<i32>::deserialize(Some(json!([]))).unwrap(),
-            Vec::<i32>::new().to_owned()
+            Vec::<i32>::new()
         );
         assert_eq!(
             Vec::<i32>::deserialize(Some(json!([21, 42]))).unwrap(),
@@ -704,11 +704,11 @@ mod tests {
         );
         assert_eq!(
             serde_json::Value::deserialize(Some(json!(42))).unwrap(),
-            json!(42).to_owned()
+            json!(42)
         );
         assert_eq!(
             serde_json::Value::deserialize(Some(json!("foo"))).unwrap(),
-            json!("foo").to_owned()
+            json!("foo")
         );
         assert_eq!(serde_json::Value::deserialize(None).unwrap(), json!(null));
         assert_eq!(

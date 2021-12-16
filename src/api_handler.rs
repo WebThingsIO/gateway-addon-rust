@@ -33,7 +33,7 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 ///                 content_type: json!("text/plain"),
 ///                 status: 200,
 ///             }),
-///             _ => Err("unknown route".to_owned())
+///             _ => Err("unknown route".to_owned()),
 ///         }
 ///     }
 /// }
