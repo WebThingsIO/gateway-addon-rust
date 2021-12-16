@@ -9,7 +9,6 @@
 //! To get started, have a look at a [complete example](https://github.com/WebThingsIO/example-adapter-rust).
 
 pub mod action;
-mod action_description;
 pub mod adapter;
 pub mod api_error;
 pub mod api_handler;
@@ -37,18 +36,20 @@ pub mod type_;
 /// ```
 pub mod prelude {
     pub use crate::{
-        action::{Action, ActionDescription, ActionHandle, Actions},
+        action::{self, Action, ActionDescription, ActionHandle, Actions},
         actions,
         adapter::{Adapter, AdapterHandle},
         api_error::ApiError,
         api_handler::{ApiHandler, ApiRequest, ApiResponse},
         database::Database,
         device::{Device, DeviceBuilder, DeviceDescription, DeviceHandle},
-        event::{Event, EventDescription, EventHandle, Events},
+        event::{self, Event, EventDescription, EventHandle, Events},
         events,
         plugin::Plugin,
         properties,
-        property::{Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle},
+        property::{
+            self, Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle,
+        },
     };
 }
 
