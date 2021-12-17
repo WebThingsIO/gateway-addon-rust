@@ -6,11 +6,7 @@
 
 //! A module for everything related to WebthingsIO adapters.
 
-use crate::{
-    api_error::ApiError,
-    client::Client,
-    device::{self, Device, DeviceBuilder},
-};
+use crate::{api_error::ApiError, client::Client, device, Device, DeviceBuilder};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -26,11 +22,11 @@ use webthings_gateway_ipc_types::{
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
-/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::plugin::Plugin].
+/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::Plugin].
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, api_error::ApiError};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
@@ -83,7 +79,7 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
     /// Return the wrapped [adapter handle][AdapterHandle].
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
-    /// Called when a new [device][crate::device::Device] was saved within the gateway.
+    /// Called when a new [device][crate::Device] was saved within the gateway.
     ///
     /// This happens when a thing was added through the add things view.
     async fn on_device_saved(
@@ -108,7 +104,7 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
         Ok(())
     }
 
-    /// Called when a previously saved [device][crate::device::Device] was removed.
+    /// Called when a previously saved [device][crate::Device] was removed.
     ///
     /// This happens when an added thing was removed through the gateway.
     async fn on_remove_device(&mut self, _device_id: String) -> Result<(), String> {
@@ -141,7 +137,7 @@ impl AdapterHandle {
         }
     }
 
-    /// Build and add a new device using the given [device builder][crate::device::DeviceBuilder].
+    /// Build and add a new device using the given [device builder][crate::DeviceBuilder].
     pub async fn add_device<D, B>(
         &mut self,
         device_builder: B,
@@ -203,12 +199,12 @@ impl AdapterHandle {
         Ok(device)
     }
 
-    /// Get a reference to all the [devices][crate::device::Device] which this adapter owns.
+    /// Get a reference to all the [devices][crate::Device] which this adapter owns.
     pub fn devices(&self) -> &HashMap<String, Arc<Mutex<Box<dyn Device>>>> {
         &self.devices
     }
 
-    /// Get a [device][crate::device::Device] which this adapter owns by ID.
+    /// Get a [device][crate::Device] which this adapter owns by ID.
     pub fn get_device(&self, id: impl Into<String>) -> Option<Arc<Mutex<Box<dyn Device>>>> {
         self.devices.get(&id.into()).cloned()
     }
@@ -224,7 +220,7 @@ impl AdapterHandle {
         self.client.lock().await.send_message(&message).await
     }
 
-    /// Remove a [device][crate::device::Device] which this adapter owns by ID.
+    /// Remove a [device][crate::Device] which this adapter owns by ID.
     pub async fn remove_device(&mut self, device_id: impl Into<String>) -> Result<(), ApiError> {
         let device_id = device_id.into();
         if self.devices.remove(&device_id).is_none() {
@@ -245,9 +241,8 @@ impl AdapterHandle {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        adapter::{Adapter, AdapterHandle},
-        client::Client,
-        device::{tests::MockDeviceBuilder, Device, DeviceBuilder},
+        client::Client, device::tests::MockDeviceBuilder, Adapter, AdapterHandle, Device,
+        DeviceBuilder,
     };
     use async_trait::async_trait;
     use mockall::mock;
@@ -348,7 +343,7 @@ pub(crate) mod tests {
     #[fixture]
     fn adapter() -> AdapterHandle {
         let client = Arc::new(Mutex::new(Client::new()));
-        AdapterHandle::new(client.clone(), PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned())
+        AdapterHandle::new(client, PLUGIN_ID.to_owned(), ADAPTER_ID.to_owned())
     }
 
     #[rstest]

@@ -19,7 +19,10 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder};
+/// # use gateway_addon_rust::{
+/// #     prelude::*, plugin::connect, example::ExampleDeviceBuilder,
+/// #     api_handler::{ApiHandler, ApiRequest, ApiResponse}, api_error::ApiError
+/// # };
 /// # use async_trait::async_trait;
 /// # use serde_json::json;
 /// struct ExampleApiHandler();
@@ -33,7 +36,7 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 ///                 content_type: json!("text/plain"),
 ///                 status: 200,
 ///             }),
-///             _ => Err("unknown route".to_owned())
+///             _ => Err("unknown route".to_owned()),
 ///         }
 ///     }
 /// }
@@ -82,7 +85,7 @@ impl ApiHandler for NoopApiHandler {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{ApiHandler, ApiRequest, ApiResponse};
+    use crate::api_handler::{ApiHandler, ApiRequest, ApiResponse};
     use async_trait::async_trait;
     use mockall::mock;
 

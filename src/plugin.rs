@@ -7,11 +7,11 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    adapter::{Adapter, AdapterHandle},
     api_error::ApiError,
     api_handler::{ApiHandler, ApiResponse},
     client::Client,
     database::Database,
+    Adapter, AdapterHandle,
 };
 use futures::prelude::*;
 use mockall_double::double;
@@ -35,9 +35,7 @@ const DONT_RESTART_EXIT_CODE: i32 = 100;
 mod double {
     #[cfg(not(test))]
     pub mod plugin {
-        use crate::{
-            api_error::ApiError, api_handler::NoopApiHandler, client::Client, plugin::Plugin,
-        };
+        use crate::{api_error::ApiError, api_handler::NoopApiHandler, client::Client, Plugin};
         use futures::stream::{SplitStream, StreamExt};
         use std::{collections::HashMap, str::FromStr, sync::Arc};
         use tokio::{net::TcpStream, sync::Mutex};
@@ -118,7 +116,7 @@ mod double {
 
     #[cfg(test)]
     pub mod mock_plugin {
-        use crate::{api_handler::NoopApiHandler, client::Client, plugin::Plugin};
+        use crate::{api_handler::NoopApiHandler, client::Client, Plugin};
         use std::{collections::HashMap, sync::Arc};
         use tokio::sync::Mutex;
         use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
@@ -146,7 +144,7 @@ mod double {
                 plugin_id: plugin_id.into(),
                 preferences,
                 user_profile,
-                client: client.clone(),
+                client,
                 stream: (),
                 adapters: HashMap::new(),
                 api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
@@ -605,7 +603,7 @@ impl Plugin {
     ///
     /// # Examples
     /// ```no_run
-    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter};
+    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter, api_error::ApiError};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), ApiError> {
     /// #   let mut plugin = connect("example-addon").await?;
@@ -707,16 +705,13 @@ impl Plugin {
 mod tests {
     use crate::{
         action::{tests::MockAction, Input, NoInput},
-        adapter::{
-            tests::{add_mock_device, MockAdapter},
-            Adapter,
-        },
-        api_handler::tests::MockApiHandler,
+        adapter::tests::{add_mock_device, MockAdapter},
+        api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
         device::tests::MockDevice,
-        event::{EventHandle, NoData},
-        plugin::{connect, Plugin},
-        property::{self, tests::MockProperty, PropertyHandle},
-        ApiRequest, ApiResponse,
+        event::NoData,
+        plugin::connect,
+        property::{self, tests::MockProperty},
+        Adapter, EventHandle, Plugin, PropertyHandle,
     };
     use as_any::Downcast;
     use rstest::{fixture, rstest};
@@ -754,7 +749,7 @@ mod tests {
             .returning(|_| Ok(()));
 
         plugin
-            .create_adapter(adapter_id, adapter_id, |adapter| MockAdapter::new(adapter))
+            .create_adapter(adapter_id, adapter_id, MockAdapter::new)
             .await
             .unwrap()
     }
@@ -963,7 +958,7 @@ mod tests {
                         && msg.data.action_name == action_name
                         && msg.data.action_id == ACTION_ID
                         && msg.data.message_id == message_id
-                        && msg.data.success == true
+                        && msg.data.success
                 }
                 _ => false,
             })
@@ -1100,7 +1095,7 @@ mod tests {
         let message: Message = AdapterStartPairingCommandMessageData {
             plugin_id: PLUGIN_ID.to_owned(),
             adapter_id: ADAPTER_ID.to_owned(),
-            timeout: timeout,
+            timeout,
         }
         .into();
 

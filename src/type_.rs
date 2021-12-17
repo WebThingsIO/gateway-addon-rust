@@ -6,9 +6,7 @@
 
 //! A module for working with WoT datatypes.
 
-use crate::{
-    action_description::Input, event_description::Data, property_description::Value, ApiError,
-};
+use crate::{action::Input, api_error::ApiError, event::Data, property::Value};
 use serde_json::json;
 
 /// An enum of all WoT datatypes.

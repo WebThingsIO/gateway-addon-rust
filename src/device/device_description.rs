@@ -5,7 +5,6 @@
  */
 
 use std::collections::BTreeMap;
-
 use webthings_gateway_ipc_types::{
     Action as FullActionDescription, Device as FullDeviceDescription, DevicePin,
     Event as FullEventDescription, Link, Property as FullPropertyDescription,
@@ -13,7 +12,7 @@ use webthings_gateway_ipc_types::{
 
 /// A struct which represents a WoT [device description][webthings_gateway_ipc_types::Device].
 ///
-/// This is used by [DeviceBuilder][crate::device::DeviceBuilder].
+/// This is used by [DeviceBuilder][crate::DeviceBuilder].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///
