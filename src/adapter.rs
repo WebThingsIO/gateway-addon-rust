@@ -26,7 +26,7 @@ use webthings_gateway_ipc_types::{
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
-/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::plugin::Plugin].
+/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][Plugin].
 ///
 /// # Examples
 /// ```no_run
