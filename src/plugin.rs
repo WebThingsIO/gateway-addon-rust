@@ -13,6 +13,7 @@ use crate::{
     database::Database,
     Adapter, AdapterHandle,
 };
+use as_any::{AsAny, Downcast};
 use futures::prelude::*;
 use mockall_double::double;
 use serde::{de::DeserializeOwned, Serialize};
@@ -35,7 +36,10 @@ const DONT_RESTART_EXIT_CODE: i32 = 100;
 mod double {
     #[cfg(not(test))]
     pub mod plugin {
-        use crate::{api_error::ApiError, api_handler::NoopApiHandler, client::Client, Plugin};
+        use crate::{
+            api_error::ApiError, api_handler::NoopApiHandler, client::Client,
+            plugin::ForwardingMessageProxy, Plugin,
+        };
         use futures::stream::{SplitStream, StreamExt};
         use std::{collections::HashMap, str::FromStr, sync::Arc};
         use tokio::{net::TcpStream, sync::Mutex};
@@ -90,6 +94,7 @@ mod double {
                 plugin_id,
                 preferences,
                 user_profile,
+                message_proxy: Box::new(ForwardingMessageProxy),
                 client: Arc::new(Mutex::new(client)),
                 stream,
                 adapters: HashMap::new(),
@@ -116,7 +121,9 @@ mod double {
 
     #[cfg(test)]
     pub mod mock_plugin {
-        use crate::{api_handler::NoopApiHandler, client::Client, Plugin};
+        use crate::{
+            api_handler::NoopApiHandler, client::Client, plugin::ForwardingMessageProxy, Plugin,
+        };
         use std::{collections::HashMap, sync::Arc};
         use tokio::sync::Mutex;
         use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
@@ -144,6 +151,7 @@ mod double {
                 plugin_id: plugin_id.into(),
                 preferences,
                 user_profile,
+                message_proxy: Box::new(ForwardingMessageProxy),
                 client,
                 stream: (),
                 adapters: HashMap::new(),
@@ -179,6 +187,8 @@ pub struct Plugin {
     pub plugin_id: String,
     pub preferences: Preferences,
     pub user_profile: UserProfile,
+    #[doc(hidden)]
+    pub message_proxy: Box<dyn MessageProxy>,
     pub(crate) client: Arc<Mutex<Client>>,
     stream: PluginStream,
     adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
@@ -186,7 +196,31 @@ pub struct Plugin {
 }
 
 #[doc(hidden)]
-pub(crate) enum MessageResult {
+pub trait MessageProxy: AsAny + 'static {
+    fn handle_message(&self, message: IPCMessage) -> MessageProxyResult;
+}
+
+impl Downcast for dyn MessageProxy {}
+
+#[doc(hidden)]
+struct ForwardingMessageProxy;
+
+impl MessageProxy for ForwardingMessageProxy {
+    fn handle_message(&self, message: IPCMessage) -> MessageProxyResult {
+        MessageProxyResult::Forward(message)
+    }
+}
+
+#[doc(hidden)]
+#[allow(clippy::large_enum_variant)]
+pub enum MessageProxyResult {
+    Return(Result<MessageResult, String>),
+    Forward(IPCMessage),
+}
+
+#[doc(hidden)]
+#[derive(PartialEq, Debug)]
+pub enum MessageResult {
     Continue,
     Terminate,
 }
@@ -216,8 +250,12 @@ impl Plugin {
     #[doc(hidden)]
     pub(crate) async fn handle_message(
         &mut self,
-        message: IPCMessage,
+        mut message: IPCMessage,
     ) -> Result<MessageResult, String> {
+        match self.message_proxy.handle_message(message) {
+            MessageProxyResult::Forward(msg) => message = msg,
+            MessageProxyResult::Return(result) => return result,
+        }
         match message {
             IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
                 message_type: _,
@@ -709,11 +747,12 @@ mod tests {
         api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
         device::tests::MockDevice,
         event::NoData,
-        plugin::connect,
+        plugin::{connect, MessageProxy, MessageProxyResult, MessageResult},
         property::{self, tests::MockProperty},
         Adapter, EventHandle, Plugin, PropertyHandle,
     };
     use as_any::Downcast;
+    use mockall::mock;
     use rstest::{fixture, rstest};
     use serde_json::json;
     use std::{collections::BTreeMap, sync::Arc};
@@ -724,7 +763,7 @@ mod tests {
         ApiHandlerApiRequestMessageData, ApiHandlerUnloadRequestMessageData,
         DeviceRemoveActionRequestMessageData, DeviceRequestActionRequestMessageData,
         DeviceSavedNotificationMessageData, DeviceSetPropertyCommandMessageData, DeviceWithoutId,
-        Message, PluginUnloadRequestMessageData,
+        Message, MockAdapterAddDeviceRequestMessageData, PluginUnloadRequestMessageData,
     };
 
     async fn add_mock_adapter(
@@ -1055,7 +1094,10 @@ mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        plugin.handle_message(message).await.unwrap();
+        assert_eq!(
+            plugin.handle_message(message).await,
+            Ok(MessageResult::Terminate)
+        );
     }
 
     #[rstest]
@@ -1335,5 +1377,76 @@ mod tests {
             .returning(|_| Ok(()));
 
         plugin.handle_message(message).await.unwrap();
+    }
+
+    mock! {
+        MessageProxy {
+            fn handle_mock_request(&self);
+        }
+    }
+
+    impl MessageProxy for MockMessageProxy {
+        fn handle_message(&self, message: Message) -> MessageProxyResult {
+            match message {
+                Message::MockAdapterAddDeviceRequest(_) => {
+                    self.handle_mock_request();
+                    MessageProxyResult::Return(Ok(MessageResult::Continue))
+                }
+                _ => MessageProxyResult::Forward(message),
+            }
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_message_handler_proxy_forward(mut plugin: Plugin) {
+        plugin.message_proxy = Box::new(MockMessageProxy::new());
+
+        let message: Message = PluginUnloadRequestMessageData {
+            plugin_id: PLUGIN_ID.to_owned(),
+        }
+        .into();
+
+        plugin
+            .client
+            .lock()
+            .await
+            .expect_send_message()
+            .withf(move |msg| matches!(msg, Message::PluginUnloadResponse(_)))
+            .times(1)
+            .returning(|_| Ok(()));
+
+        assert_eq!(
+            plugin.handle_message(message).await,
+            Ok(MessageResult::Terminate)
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_message_handler_proxy_return(mut plugin: Plugin) {
+        plugin.message_proxy = Box::new(MockMessageProxy::new());
+
+        let message: Message = MockAdapterAddDeviceRequestMessageData {
+            plugin_id: PLUGIN_ID.to_owned(),
+            adapter_id: ADAPTER_ID.to_owned(),
+            device_descr: BTreeMap::new(),
+            device_id: DEVICE_ID.to_owned(),
+        }
+        .into();
+
+        plugin
+            .message_proxy
+            .downcast_mut::<MockMessageProxy>()
+            .unwrap()
+            .expect_handle_mock_request()
+            .withf(|| true)
+            .times(1)
+            .returning(|| ());
+
+        assert_eq!(
+            plugin.handle_message(message).await,
+            Ok(MessageResult::Continue)
+        );
     }
 }
