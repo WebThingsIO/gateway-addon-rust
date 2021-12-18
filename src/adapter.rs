@@ -6,7 +6,7 @@
 
 //! A module for everything related to WebthingsIO adapters.
 
-use crate::{error::WebthingsError, client::Client, device, Device, DeviceBuilder};
+use crate::{client::Client, device, error::WebthingsError, Device, DeviceBuilder};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{

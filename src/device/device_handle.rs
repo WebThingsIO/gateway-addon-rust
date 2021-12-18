@@ -6,8 +6,8 @@
 
 use crate::{
     action::ActionBase,
-    error::WebthingsError,
     client::Client,
+    error::WebthingsError,
     event::{EventBase, EventHandleBase},
     property::{PropertyBase, PropertyBuilderBase},
     ActionHandle, Adapter, Device, DeviceDescription,

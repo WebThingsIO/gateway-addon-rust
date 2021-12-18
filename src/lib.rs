@@ -10,12 +10,12 @@
 
 pub mod action;
 pub mod adapter;
-pub mod error;
 pub mod api_handler;
 #[doc(hidden)]
 pub mod client;
 pub mod database;
 pub mod device;
+pub mod error;
 pub mod event;
 #[cfg(not(test))]
 #[doc(hidden)]

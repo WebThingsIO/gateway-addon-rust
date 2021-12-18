@@ -5,7 +5,7 @@
  */
 
 use crate::{
-    error::WebthingsError, client::Client, event::Data, Device, EventDescription, EventHandle,
+    client::Client, error::WebthingsError, event::Data, Device, EventDescription, EventHandle,
 };
 use as_any::{AsAny, Downcast};
 

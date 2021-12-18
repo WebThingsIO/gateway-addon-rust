@@ -5,8 +5,8 @@
  */
 
 use crate::{
-    error::WebthingsError,
     client::Client,
+    error::WebthingsError,
     property::{PropertyBase, Value},
     Device, Property, PropertyHandle,
 };
