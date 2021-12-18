@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, client::Client, property::Value, Device, PropertyDescription};
+use crate::{client::Client, error::WebthingsError, property::Value, Device, PropertyDescription};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -53,7 +53,7 @@ impl<T: Value> PropertyHandle<T> {
     }
 
     /// Sets the [value][Value] and notifies the gateway.
-    pub async fn set_value(&mut self, value: T) -> Result<(), ApiError> {
+    pub async fn set_value(&mut self, value: T) -> Result<(), WebthingsError> {
         self.description.value = value;
 
         let message: Message = DevicePropertyChangedNotificationMessageData {
@@ -81,14 +81,14 @@ pub trait PropertyHandleBase: Send + Sync + AsAny + 'static {
     /// Sets the [value][Value] and notifies the gateway.
     ///
     /// Make sure that the type of the provided value is compatible.
-    async fn set_value(&mut self, value: Option<serde_json::Value>) -> Result<(), ApiError>;
+    async fn set_value(&mut self, value: Option<serde_json::Value>) -> Result<(), WebthingsError>;
 }
 
 impl Downcast for dyn PropertyHandleBase {}
 
 #[async_trait]
 impl<T: Value> PropertyHandleBase for PropertyHandle<T> {
-    async fn set_value(&mut self, value: Option<serde_json::Value>) -> Result<(), ApiError> {
+    async fn set_value(&mut self, value: Option<serde_json::Value>) -> Result<(), WebthingsError> {
         let value = <T as Value>::deserialize(value)?;
         PropertyHandle::set_value(self, value).await
     }

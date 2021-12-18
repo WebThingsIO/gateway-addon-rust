@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, type_::Type, EventDescription};
+use crate::{error::WebthingsError, type_::Type, EventDescription};
 use serde::{ser::Error, Serialize};
 
 /// A trait which converts Rust types to WoT [types][crate::type_::Type].
@@ -13,7 +13,7 @@ use serde::{ser::Error, Serialize};
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, type_::Type, event::{AtType, Data}, api_error::ApiError};
+/// # use gateway_addon_rust::{prelude::*, type_::Type, event::{AtType, Data}, error::WebthingsError};
 /// # use serde_json::json;
 /// # use serde::{de::Error, Deserialize};
 /// #[derive(Clone)]
@@ -26,9 +26,9 @@ use serde::{ser::Error, Serialize};
 ///     fn description(description: EventDescription<Self>) -> EventDescription<Self> {
 ///         description.at_type(AtType::OverheatedEvent)
 ///     }
-///     fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+///     fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
 ///         Ok(Some(
-///             serde_json::to_value(value.0).map_err(ApiError::Serialization)?,
+///             serde_json::to_value(value.0).map_err(WebthingsError::Serialization)?,
 ///         ))
 ///     }
 /// }
@@ -45,7 +45,7 @@ pub trait Data: Clone + Send + Sync + 'static {
     }
 
     /// Serialize the value.
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError>;
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError>;
 }
 
 /// A simplification of [Data] which requires [Serialize] to auto-implement [Data].
@@ -72,9 +72,9 @@ pub trait SimpleData: Serialize + Clone + Send + Sync + 'static {
     }
 
     /// Serialize the value.
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(Some(
-            serde_json::to_value(value).map_err(ApiError::Serialization)?,
+            serde_json::to_value(value).map_err(WebthingsError::Serialization)?,
         ))
     }
 }
@@ -88,7 +88,7 @@ impl<T: SimpleData> Data for T {
         <T as SimpleData>::description(description)
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         <T as SimpleData>::serialize(value)
     }
 }
@@ -102,7 +102,7 @@ impl Data for NoData {
         None
     }
 
-    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(None)
     }
 }
@@ -202,11 +202,13 @@ impl<T: Data> Data for Vec<T> {
         description
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         let mut v = Vec::new();
         for e in value {
             v.push(T::serialize(e)?.ok_or_else(|| {
-                ApiError::Serialization(serde_json::Error::custom("Expected Some, found None"))
+                WebthingsError::Serialization(serde_json::Error::custom(
+                    "Expected Some, found None",
+                ))
             })?);
         }
         Ok(Some(serde_json::Value::Array(v)))
@@ -234,10 +236,12 @@ impl<T: Data> Data for Option<T> {
         description
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(if let Some(value) = value {
             Some(T::serialize(value)?.ok_or_else(|| {
-                ApiError::Serialization(serde_json::Error::custom("Expected Some, found None"))
+                WebthingsError::Serialization(serde_json::Error::custom(
+                    "Expected Some, found None",
+                ))
             })?)
         } else {
             None

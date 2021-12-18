@@ -10,7 +10,7 @@
 
 pub mod action;
 pub mod adapter;
-pub mod api_error;
+pub mod error;
 pub mod api_handler;
 #[doc(hidden)]
 pub mod client;

@@ -6,7 +6,7 @@
 
 //! A module for everything related to WebthingsIO adapters.
 
-use crate::{api_error::ApiError, client::Client, device, Device, DeviceBuilder};
+use crate::{error::WebthingsError, client::Client, device, Device, DeviceBuilder};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use std::{
@@ -26,7 +26,7 @@ use webthings_gateway_ipc_types::{
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, api_error::ApiError};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, error::WebthingsError};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
@@ -49,7 +49,7 @@ use webthings_gateway_ipc_types::{
 /// #       Self(adapter_handle)
 /// #   }
 ///
-///     pub async fn init(&mut self) -> Result<(), ApiError> {
+///     pub async fn init(&mut self) -> Result<(), WebthingsError> {
 ///         self.adapter_handle_mut()
 ///             .add_device(ExampleDeviceBuilder::new())
 ///             .await?;
@@ -58,7 +58,7 @@ use webthings_gateway_ipc_types::{
 /// }
 ///
 /// # #[tokio::main]
-/// pub async fn main() -> Result<(), ApiError> {
+/// pub async fn main() -> Result<(), WebthingsError> {
 ///     let mut plugin = connect("example-addon").await?;
 ///     let adapter = plugin
 ///         .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new)
@@ -141,7 +141,7 @@ impl AdapterHandle {
     pub async fn add_device<D, B>(
         &mut self,
         device_builder: B,
-    ) -> Result<Arc<Mutex<Box<dyn Device>>>, ApiError>
+    ) -> Result<Arc<Mutex<Box<dyn Device>>>, WebthingsError>
     where
         D: Device,
         B: DeviceBuilder<Device = D>,
@@ -210,7 +210,7 @@ impl AdapterHandle {
     }
 
     /// Unload this adapter.
-    pub async fn unload(&self) -> Result<(), ApiError> {
+    pub async fn unload(&self) -> Result<(), WebthingsError> {
         let message: Message = AdapterUnloadResponseMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),
@@ -221,10 +221,13 @@ impl AdapterHandle {
     }
 
     /// Remove a [device][crate::Device] which this adapter owns by ID.
-    pub async fn remove_device(&mut self, device_id: impl Into<String>) -> Result<(), ApiError> {
+    pub async fn remove_device(
+        &mut self,
+        device_id: impl Into<String>,
+    ) -> Result<(), WebthingsError> {
         let device_id = device_id.into();
         if self.devices.remove(&device_id).is_none() {
-            return Err(ApiError::UnknownDevice(device_id.clone()));
+            return Err(WebthingsError::UnknownDevice(device_id.clone()));
         }
 
         let message: Message = AdapterRemoveDeviceResponseMessageData {

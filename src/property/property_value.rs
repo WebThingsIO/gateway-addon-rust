@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, type_::Type, PropertyDescription};
+use crate::{error::WebthingsError, type_::Type, PropertyDescription};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
 
@@ -14,7 +14,7 @@ use serde_json::json;
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, type_::Type, property::{AtType, Value}, api_error::ApiError};
+/// # use gateway_addon_rust::{prelude::*, type_::Type, property::{AtType, Value}, error::WebthingsError};
 /// # use serde::de::Error;
 /// #[derive(Clone, Default)]
 /// struct Level(i32);
@@ -26,17 +26,17 @@ use serde_json::json;
 ///     fn description(description: PropertyDescription<Self>) -> PropertyDescription<Self> {
 ///         description.at_type(AtType::LevelProperty)
 ///     }
-///     fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+///     fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
 ///         Ok(Some(
-///             serde_json::to_value(value.0).map_err(ApiError::Serialization)?,
+///             serde_json::to_value(value.0).map_err(WebthingsError::Serialization)?,
 ///         ))
 ///     }
-///     fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+///     fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
 ///         Ok(Self(
 ///             serde_json::from_value(value.ok_or_else(|| {
-///                 ApiError::Serialization(serde_json::Error::custom("Expected Some, found None"))
+///                 WebthingsError::Serialization(serde_json::Error::custom("Expected Some, found None"))
 ///             })?)
-///             .map_err(ApiError::Serialization)?,
+///             .map_err(WebthingsError::Serialization)?,
 ///         ))
 ///     }
 /// }
@@ -53,10 +53,10 @@ pub trait Value: Clone + Default + Send + Sync + 'static {
     }
 
     /// Serialize the value.
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError>;
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError>;
 
     /// Deserialize the value.
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError>;
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError>;
 }
 
 /// A simplification of [Value] which requires [Serialize] and [DeserializeOwned] to auto-implement [Value].
@@ -85,20 +85,20 @@ pub trait SimpleValue:
     }
 
     /// Serialize the value.
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(Some(
-            serde_json::to_value(value).map_err(ApiError::Serialization)?,
+            serde_json::to_value(value).map_err(WebthingsError::Serialization)?,
         ))
     }
 
     /// Deserialize the value.
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         serde_json::from_value(value.ok_or_else(|| {
-            ApiError::Serialization(<serde_json::Error as serde::de::Error>::custom(
+            WebthingsError::Serialization(<serde_json::Error as serde::de::Error>::custom(
                 "Expected Some, found None",
             ))
         })?)
-        .map_err(ApiError::Serialization)
+        .map_err(WebthingsError::Serialization)
     }
 }
 
@@ -111,11 +111,11 @@ impl<T: SimpleValue> Value for T {
         <T as SimpleValue>::description(description)
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         <T as SimpleValue>::serialize(value)
     }
 
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         <T as SimpleValue>::deserialize(value)
     }
 }
@@ -213,9 +213,9 @@ impl SimpleValue for String {
 }
 
 impl SimpleValue for serde_json::Value {
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         match value {
-            Some(value) => serde_json::from_value(value).map_err(ApiError::Serialization),
+            Some(value) => serde_json::from_value(value).map_err(WebthingsError::Serialization),
             None => Ok(json!(null)),
         }
     }
@@ -230,11 +230,11 @@ impl<T: Value> Value for Vec<T> {
         description
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         let mut v = Vec::new();
         for t in value {
             v.push(T::serialize(t)?.ok_or_else(|| {
-                ApiError::Serialization(<serde_json::Error as serde::ser::Error>::custom(
+                WebthingsError::Serialization(<serde_json::Error as serde::ser::Error>::custom(
                     "Expected Some, found None",
                 ))
             })?);
@@ -242,7 +242,7 @@ impl<T: Value> Value for Vec<T> {
         Ok(Some(serde_json::Value::Array(v)))
     }
 
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         if let Some(value) = value {
             if let serde_json::Value::Array(value) = value {
                 let mut v = Vec::new();
@@ -251,12 +251,12 @@ impl<T: Value> Value for Vec<T> {
                 }
                 Ok(v)
             } else {
-                Err(ApiError::Serialization(
+                Err(WebthingsError::Serialization(
                     <serde_json::Error as serde::de::Error>::custom("Expected Array"),
                 ))
             }
         } else {
-            Err(ApiError::Serialization(
+            Err(WebthingsError::Serialization(
                 <serde_json::Error as serde::de::Error>::custom("Expected Some, found None"),
             ))
         }
@@ -286,7 +286,7 @@ impl<T: Value> Value for Option<T> {
         description
     }
 
-    fn serialize(value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(if let Some(value) = value {
             T::serialize(value)?
         } else {
@@ -294,7 +294,7 @@ impl<T: Value> Value for Option<T> {
         })
     }
 
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         Ok(if let Some(value) = value {
             match value {
                 serde_json::Value::Null => None,

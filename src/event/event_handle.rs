@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, client::Client, event::Data, Device, EventDescription};
+use crate::{client::Client, error::WebthingsError, event::Data, Device, EventDescription};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -55,7 +55,7 @@ impl<T: Data> EventHandle<T> {
     }
 
     /// Raise a new event instance of this event.
-    pub async fn raise(&self, data: T) -> Result<(), ApiError> {
+    pub async fn raise(&self, data: T) -> Result<(), WebthingsError> {
         let data = Data::serialize(data)?;
         EventHandleBase::raise(self, data).await
     }
@@ -73,14 +73,14 @@ pub trait EventHandleBase: Send + Sync + AsAny + 'static {
     /// Raise a new event instance of this event.
     ///
     /// Make sure that the type of the provided data is compatible.
-    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), ApiError>;
+    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), WebthingsError>;
 }
 
 impl Downcast for dyn EventHandleBase {}
 
 #[async_trait]
 impl<D: Data> EventHandleBase for EventHandle<D> {
-    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), ApiError> {
+    async fn raise(&self, data: Option<serde_json::Value>) -> Result<(), WebthingsError> {
         let time: DateTime<Utc> = SystemTime::now().into();
         let message: Message = DeviceEventNotificationMessageData {
             plugin_id: self.plugin_id.clone(),

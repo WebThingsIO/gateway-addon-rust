@@ -5,7 +5,7 @@
  */
 
 use crate::{
-    api_error::ApiError, client::Client, event::Data, Device, EventDescription, EventHandle,
+    error::WebthingsError, client::Client, event::Data, Device, EventDescription, EventHandle,
 };
 use as_any::{AsAny, Downcast};
 
@@ -59,7 +59,7 @@ pub trait Event: Send + Sync + 'static {
     fn init(&self, _event_handle: EventHandle<Self::Data>) {}
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullEventDescription, ApiError> {
+    fn full_description(&self) -> Result<FullEventDescription, WebthingsError> {
         self.description().into_full_description(self.name())
     }
 
@@ -99,7 +99,7 @@ pub trait EventBase: Send + Sync + AsAny + 'static {
     fn name(&self) -> String;
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullEventDescription, ApiError>;
+    fn full_description(&self) -> Result<FullEventDescription, WebthingsError>;
 
     #[doc(hidden)]
     fn build_event_handle(
@@ -120,7 +120,7 @@ impl<T: Event> EventBase for T {
         <T as Event>::name(self)
     }
 
-    fn full_description(&self) -> Result<FullEventDescription, ApiError> {
+    fn full_description(&self) -> Result<FullEventDescription, WebthingsError> {
         <T as Event>::full_description(self)
     }
 

@@ -6,7 +6,7 @@
 
 use crate::{
     action::ActionBase,
-    api_error::ApiError,
+    error::WebthingsError,
     client::Client,
     event::{EventBase, EventHandleBase},
     property::{PropertyBase, PropertyBuilderBase},
@@ -97,14 +97,14 @@ impl DeviceHandle {
         &self,
         name: impl Into<String>,
         value: Option<serde_json::Value>,
-    ) -> Result<(), ApiError> {
+    ) -> Result<(), WebthingsError> {
         let name = name.into();
         if let Some(property) = self.properties.get(&name.clone()) {
             let mut property = property.lock().await;
             property.property_handle_mut().set_value(value).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownProperty(name))
+            Err(WebthingsError::UnknownProperty(name))
         }
     }
 
@@ -205,19 +205,19 @@ impl DeviceHandle {
         &self,
         name: impl Into<String>,
         data: Option<serde_json::Value>,
-    ) -> Result<(), ApiError> {
+    ) -> Result<(), WebthingsError> {
         let name = name.into();
         if let Some(event) = self.events.get(&name.clone()) {
             let event = event.lock().await;
             event.raise(data).await?;
             Ok(())
         } else {
-            Err(ApiError::UnknownEvent(name))
+            Err(WebthingsError::UnknownEvent(name))
         }
     }
 
     /// Set the connected state of this device and notify the gateway.
-    pub async fn set_connected(&mut self, connected: bool) -> Result<(), ApiError> {
+    pub async fn set_connected(&mut self, connected: bool) -> Result<(), WebthingsError> {
         self.connected = connected;
 
         let message: Message = DeviceConnectedStateNotificationMessageData {

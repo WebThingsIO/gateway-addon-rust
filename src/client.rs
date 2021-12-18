@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::api_error::ApiError;
+use crate::error::WebthingsError;
 use futures::{prelude::*, stream::SplitSink};
 use mockall_double::double;
 use tokio::net::TcpStream;
@@ -14,7 +14,7 @@ use webthings_gateway_ipc_types::Message as IPCMessage;
 #[cfg(test)]
 mockall::mock! {
     pub WebsocketClient {
-        pub async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), ApiError>;
+        pub async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), WebthingsError>;
     }
 }
 
@@ -27,17 +27,17 @@ impl WebsocketClient {
         Self { sink }
     }
 
-    pub async fn send(&mut self, msg: String) -> Result<(), ApiError> {
+    pub async fn send(&mut self, msg: String) -> Result<(), WebthingsError> {
         log::trace!("Sending message {}", msg);
 
         self.sink
             .send(Message::Text(msg))
             .await
-            .map_err(ApiError::Send)
+            .map_err(WebthingsError::Send)
     }
 
-    pub async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), ApiError> {
-        let json = serde_json::to_string(msg).map_err(ApiError::Serialization)?;
+    pub async fn send_message(&mut self, msg: &IPCMessage) -> Result<(), WebthingsError> {
+        let json = serde_json::to_string(msg).map_err(WebthingsError::Serialization)?;
 
         self.send(json).await
     }

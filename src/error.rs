@@ -10,7 +10,7 @@ use thiserror::Error;
 
 /// The set of possible errors when working with this crate.
 #[derive(Error, Debug)]
-pub enum ApiError {
+pub enum WebthingsError {
     /// Failed to connect to gateway
     #[error("Failed to connect to gateway")]
     Connect(#[source] tungstenite::Error),
