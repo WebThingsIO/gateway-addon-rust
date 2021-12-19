@@ -6,7 +6,7 @@
 
 //! A module for working with WoT datatypes.
 
-use crate::{action::Input, api_error::ApiError, event::Data, property::Value};
+use crate::{action::Input, error::WebthingsError, event::Data, property::Value};
 use serde_json::json;
 
 /// An enum of all WoT datatypes.
@@ -45,15 +45,15 @@ impl Value for Null {
         Type::Null
     }
 
-    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(Some(json!(null)))
     }
 
-    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, ApiError> {
+    fn deserialize(value: Option<serde_json::Value>) -> Result<Self, WebthingsError> {
         if let Some(value) = value {
             match value {
                 serde_json::Value::Null => Ok(Null),
-                _ => Err(ApiError::Serialization(
+                _ => Err(WebthingsError::Serialization(
                     <serde_json::Error as serde::de::Error>::custom("Expected Null"),
                 )),
             }
@@ -68,7 +68,7 @@ impl Data for Null {
         Some(Type::Null)
     }
 
-    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, ApiError> {
+    fn serialize(_value: Self) -> Result<Option<serde_json::Value>, WebthingsError> {
         Ok(Some(json!(null)))
     }
 }
@@ -78,10 +78,10 @@ impl Input for Null {
         Some(json!({"type": "null"}))
     }
 
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
         match value {
             serde_json::Value::Null => Ok(Null),
-            _ => Err(ApiError::Serialization(
+            _ => Err(WebthingsError::Serialization(
                 <serde_json::Error as serde::de::Error>::custom("Expected Null"),
             )),
         }

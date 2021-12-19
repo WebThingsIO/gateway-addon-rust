@@ -5,8 +5,8 @@
  */
 
 use crate::{
-    api_error::ApiError,
     client::Client,
+    error::WebthingsError,
     property::{PropertyBase, Value},
     Device, Property, PropertyHandle,
 };
@@ -59,7 +59,7 @@ pub trait PropertyBuilder: Send + Sync + 'static {
     fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property;
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullPropertyDescription, ApiError> {
+    fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError> {
         self.description().into_full_description(self.name())
     }
 
@@ -98,7 +98,7 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
     fn name(&self) -> String;
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullPropertyDescription, ApiError>;
+    fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError>;
 
     #[doc(hidden)]
     fn build(
@@ -116,7 +116,7 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
         <T as PropertyBuilder>::name(self)
     }
 
-    fn full_description(&self) -> Result<FullPropertyDescription, ApiError> {
+    fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError> {
         <T as PropertyBuilder>::full_description(self)
     }
 

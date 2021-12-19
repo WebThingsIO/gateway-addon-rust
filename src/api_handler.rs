@@ -21,7 +21,7 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 /// ```no_run
 /// # use gateway_addon_rust::{
 /// #     prelude::*, plugin::connect, example::ExampleDeviceBuilder,
-/// #     api_handler::{ApiHandler, ApiRequest, ApiResponse}, api_error::ApiError
+/// #     api_handler::{ApiHandler, ApiRequest, ApiResponse}, error::WebthingsError
 /// # };
 /// # use async_trait::async_trait;
 /// # use serde_json::json;
@@ -48,7 +48,7 @@ pub use webthings_gateway_ipc_types::Response as ApiResponse;
 /// # }
 /// #
 /// # #[tokio::main]
-/// pub async fn main() -> Result<(), ApiError> {
+/// pub async fn main() -> Result<(), WebthingsError> {
 ///     let mut plugin = connect("example-addon").await?;
 ///     plugin.set_api_handler(ExampleApiHandler::new()).await?;
 ///     plugin.event_loop().await;

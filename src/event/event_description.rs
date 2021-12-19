@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, event::Data, type_::Type};
+use crate::{error::WebthingsError, event::Data, type_::Type};
 use std::marker::PhantomData;
 use webthings_gateway_ipc_types::{Event as FullEventDescription, Link};
 
@@ -171,12 +171,15 @@ impl<T: Data> EventDescription<T> {
     }
 
     #[doc(hidden)]
-    pub fn into_full_description(self, name: String) -> Result<FullEventDescription, ApiError> {
+    pub fn into_full_description(
+        self,
+        name: String,
+    ) -> Result<FullEventDescription, WebthingsError> {
         let enum_ = if let Some(enum_) = self.enum_ {
             let mut v = Vec::new();
             for e in enum_ {
                 v.push(T::serialize(e)?.ok_or_else(|| {
-                    ApiError::Serialization(<serde_json::Error as serde::ser::Error>::custom(
+                    WebthingsError::Serialization(<serde_json::Error as serde::ser::Error>::custom(
                         "Expected Some, found None",
                     ))
                 })?);

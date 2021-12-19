@@ -5,7 +5,7 @@
  */
 
 use crate::{
-    actions, api_error::ApiError, events, properties, Actions, Device, DeviceDescription,
+    actions, error::WebthingsError, events, properties, Actions, Device, DeviceDescription,
     DeviceHandle, Events, Properties,
 };
 
@@ -92,7 +92,7 @@ pub trait DeviceBuilder: Send + Sync + 'static {
     fn build(self, device_handle: DeviceHandle) -> Self::Device;
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullDeviceDescription, ApiError> {
+    fn full_description(&self) -> Result<FullDeviceDescription, WebthingsError> {
         let mut property_descriptions = BTreeMap::new();
         for property_builder in self.properties() {
             property_descriptions.insert(

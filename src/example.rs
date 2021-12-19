@@ -5,7 +5,7 @@
  */
 
 use crate::{
-    action::NoInput, actions, api_error::ApiError, event::NoData, events, plugin::connect,
+    action::NoInput, actions, error::WebthingsError, event::NoData, events, plugin::connect,
     properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
     DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
     Property, PropertyBuilder, PropertyDescription, PropertyHandle,
@@ -14,7 +14,7 @@ use as_any::Downcast;
 use async_trait::async_trait;
 
 #[tokio::main]
-pub async fn main() -> Result<(), ApiError> {
+pub async fn main() -> Result<(), WebthingsError> {
     let mut plugin = connect("example-addon").await?;
     let adapter = plugin
         .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new)
@@ -43,7 +43,7 @@ impl ExampleAdapter {
         Self(adapter_handle)
     }
 
-    async fn init(&mut self) -> Result<(), ApiError> {
+    async fn init(&mut self) -> Result<(), WebthingsError> {
         self.adapter_handle_mut()
             .add_device(ExampleDeviceBuilder::new())
             .await?;

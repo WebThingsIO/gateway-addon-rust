@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{action::Input, api_error::ApiError, client::Client, Device};
+use crate::{action::Input, client::Client, error::WebthingsError, Device};
 
 use chrono::{DateTime, Utc};
 
@@ -65,21 +65,21 @@ impl<T: Input> ActionHandle<T> {
     }
 
     /// Notify the gateway that execution of this action instance has started.
-    pub async fn start(&mut self) -> Result<(), ApiError> {
+    pub async fn start(&mut self) -> Result<(), WebthingsError> {
         self.status = Status::Pending;
         self.status_notify().await?;
         Ok(())
     }
 
     /// Notify the gateway that execution of this action instance has finished.
-    pub async fn finish(&mut self) -> Result<(), ApiError> {
+    pub async fn finish(&mut self) -> Result<(), WebthingsError> {
         self.status = Status::Completed;
         self.time_completed = Some(SystemTime::now().into());
         self.status_notify().await?;
         Ok(())
     }
 
-    async fn status_notify(&self) -> Result<(), ApiError> {
+    async fn status_notify(&self) -> Result<(), WebthingsError> {
         let message = DeviceActionStatusNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: self.adapter_id.clone(),

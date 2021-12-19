@@ -4,7 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{api_error::ApiError, ActionDescription};
+use crate::{error::WebthingsError, ActionDescription};
 use schemars::{schema_for, JsonSchema};
 use serde::de::{DeserializeOwned, Error};
 use serde_json::json;
@@ -15,7 +15,7 @@ use serde_json::json;
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*,  action::{AtType, Input}, api_error::ApiError};
+/// # use gateway_addon_rust::{prelude::*,  action::{AtType, Input}, error::WebthingsError};
 /// # use serde_json::json;
 /// # use serde::{de::Error, Deserialize};
 /// #[derive(Clone)]
@@ -48,7 +48,7 @@ use serde_json::json;
 ///         description.at_type(AtType::FadeAction)
 ///     }
 ///
-///     fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+///     fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
 ///         Ok(Self{
 ///             level: value.as_object().unwrap().get("level").unwrap().as_u64().unwrap() as _,
 ///             duration: value.as_object().unwrap().get("duration").unwrap().as_u64().unwrap() as _,
@@ -70,7 +70,7 @@ pub trait Input: Clone + Send + Sync + 'static {
     }
 
     /// Deserialize the value.
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError>;
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError>;
 }
 
 /// A simplification of [Input] which requires [DeserializeOwned] and [JsonSchema] to auto-implement [Input].
@@ -102,8 +102,8 @@ pub trait SimpleInput: DeserializeOwned + JsonSchema + Clone + Send + Sync + 'st
     }
 
     /// Deserialize the value.
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
-        serde_json::from_value(value).map_err(ApiError::Serialization)
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
+        serde_json::from_value(value).map_err(WebthingsError::Serialization)
     }
 }
 
@@ -116,7 +116,7 @@ impl<T: SimpleInput> Input for T {
         <T as SimpleInput>::description(description)
     }
 
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
         <T as SimpleInput>::deserialize(value)
     }
 }
@@ -130,11 +130,11 @@ impl Input for NoInput {
         None
     }
 
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
         if value == serde_json::Value::Null {
             Ok(NoInput)
         } else {
-            Err(ApiError::Serialization(serde_json::Error::custom(
+            Err(WebthingsError::Serialization(serde_json::Error::custom(
                 "Expected no input",
             )))
         }
@@ -253,7 +253,7 @@ impl<T: Input> Input for Vec<T> {
         }))
     }
 
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
         if let serde_json::Value::Array(v) = value {
             let mut w = Vec::new();
             for e in v {
@@ -261,7 +261,7 @@ impl<T: Input> Input for Vec<T> {
             }
             Ok(w)
         } else {
-            Err(ApiError::Serialization(serde_json::Error::custom(
+            Err(WebthingsError::Serialization(serde_json::Error::custom(
                 "Expected Array",
             )))
         }
@@ -285,7 +285,7 @@ impl<T: Input> Input for Option<T> {
         })
     }
 
-    fn deserialize(value: serde_json::Value) -> Result<Self, ApiError> {
+    fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
         Ok(match value {
             serde_json::Value::Null => None,
             _ => Some(T::deserialize(value)?),

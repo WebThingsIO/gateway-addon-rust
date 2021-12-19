@@ -7,10 +7,10 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    api_error::ApiError,
     api_handler::{ApiHandler, ApiResponse},
     client::Client,
     database::Database,
+    error::WebthingsError,
     Adapter, AdapterHandle,
 };
 use futures::prelude::*;
@@ -35,7 +35,7 @@ const DONT_RESTART_EXIT_CODE: i32 = 100;
 mod double {
     #[cfg(not(test))]
     pub mod plugin {
-        use crate::{api_error::ApiError, api_handler::NoopApiHandler, client::Client, Plugin};
+        use crate::{api_handler::NoopApiHandler, client::Client, error::WebthingsError, Plugin};
         use futures::stream::{SplitStream, StreamExt};
         use std::{collections::HashMap, str::FromStr, sync::Arc};
         use tokio::{net::TcpStream, sync::Mutex};
@@ -50,11 +50,11 @@ mod double {
         const GATEWAY_URL: &str = "ws://localhost:9500";
 
         /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
-        pub async fn connect(plugin_id: impl Into<String>) -> Result<Plugin, ApiError> {
+        pub async fn connect(plugin_id: impl Into<String>) -> Result<Plugin, WebthingsError> {
             let plugin_id = plugin_id.into();
             let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
 
-            let (socket, _) = connect_async(url).await.map_err(ApiError::Connect)?;
+            let (socket, _) = connect_async(url).await.map_err(WebthingsError::Connect)?;
 
             let (sink, mut stream) = socket.split();
             let mut client = Client::new(sink);
@@ -166,9 +166,9 @@ pub use plugin::*;
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{plugin::connect, api_error::ApiError};
+/// # use gateway_addon_rust::{plugin::connect, error::WebthingsError};
 /// #[tokio::main]
-/// async fn main() -> Result<(), ApiError> {
+/// async fn main() -> Result<(), WebthingsError> {
 ///     let mut plugin = connect("example-addon").await?;
 ///     // ...
 ///     plugin.event_loop().await;
@@ -592,20 +592,20 @@ impl Plugin {
     pub fn borrow_adapter(
         &mut self,
         adapter_id: impl Into<String>,
-    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, ApiError> {
+    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, WebthingsError> {
         let adapter_id = adapter_id.into();
         self.adapters
             .get_mut(&adapter_id)
-            .ok_or(ApiError::UnknownAdapter(adapter_id))
+            .ok_or(WebthingsError::UnknownAdapter(adapter_id))
     }
 
     /// Create a new adapter.
     ///
     /// # Examples
     /// ```no_run
-    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter, api_error::ApiError};
+    /// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleAdapter, error::WebthingsError};
     /// # #[tokio::main]
-    /// # async fn main() -> Result<(), ApiError> {
+    /// # async fn main() -> Result<(), WebthingsError> {
     /// #   let mut plugin = connect("example-addon").await?;
     /// let adapter = plugin
     ///     .create_adapter("example_adapter", "Example Adapter", |adapter_handle| {
@@ -621,7 +621,7 @@ impl Plugin {
         adapter_id: impl Into<String>,
         name: impl Into<String>,
         constructor: F,
-    ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, ApiError>
+    ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, WebthingsError>
     where
         T: Adapter,
         F: FnOnce(AdapterHandle) -> T,
@@ -654,7 +654,10 @@ impl Plugin {
     }
 
     /// Set a new active [ApiHandler](crate::api_handler::ApiHandler).
-    pub async fn set_api_handler<T: ApiHandler>(&mut self, api_handler: T) -> Result<(), ApiError> {
+    pub async fn set_api_handler<T: ApiHandler>(
+        &mut self,
+        api_handler: T,
+    ) -> Result<(), WebthingsError> {
         self.api_handler = Arc::new(Mutex::new(api_handler));
         let message: Message = ApiHandlerAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -666,7 +669,7 @@ impl Plugin {
     }
 
     /// Unload this plugin.
-    pub async fn unload(&self) -> Result<(), ApiError> {
+    pub async fn unload(&self) -> Result<(), WebthingsError> {
         let message: Message = PluginUnloadResponseMessageData {
             plugin_id: self.plugin_id.clone(),
         }
@@ -678,7 +681,7 @@ impl Plugin {
     /// Fail this plugin.
     ///
     /// This should be done when an error occurs which we cannot recover from.
-    pub async fn fail(&self, message: impl Into<String>) -> Result<(), ApiError> {
+    pub async fn fail(&self, message: impl Into<String>) -> Result<(), WebthingsError> {
         let message: Message = PluginErrorNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             message: message.into(),
