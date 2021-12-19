@@ -27,6 +27,11 @@ jobs:
         with:
           command: clippy
           args: --all-features -- -D clippy::all -D warnings
+      - name: Rustdoc
+        uses: actions-rs/cargo@v1
+        with:
+          command: rustdoc
+          args:  -- -D rustdoc::broken_intra_doc_links
       - name: Test
         uses: actions-rs/cargo@v1
         with:
