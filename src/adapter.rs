@@ -79,6 +79,11 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
     /// Return the wrapped [adapter handle][AdapterHandle].
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 
+    /// Called when this Adapter should be unloaded.
+    async fn on_unload(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Called when a new [device][crate::Device] was saved within the gateway.
     ///
     /// This happens when a thing was added through the add things view.
@@ -256,6 +261,7 @@ pub(crate) mod tests {
 
     mock! {
         pub AdapterHelper {
+            pub async fn on_unload(&mut self) -> Result<(), String>;
             pub async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String>;
             pub async fn on_cancel_pairing(&mut self) -> Result<(), String>;
             pub async fn on_device_saved(
@@ -285,6 +291,10 @@ pub(crate) mod tests {
     impl Adapter for MockAdapter {
         fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
             &mut self.adapter_handle
+        }
+
+        async fn on_unload(&mut self) -> Result<(), String> {
+            self.adapter_helper.on_unload().await
         }
 
         async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String> {

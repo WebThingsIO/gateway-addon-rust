@@ -280,6 +280,13 @@ impl Plugin {
                 adapter
                     .lock()
                     .await
+                    .on_unload()
+                    .await
+                    .map_err(|err| format!("Could not unload adapter: {}", err))?;
+
+                adapter
+                    .lock()
+                    .await
                     .adapter_handle_mut()
                     .unload()
                     .await
@@ -1071,6 +1078,17 @@ mod tests {
             adapter_id: ADAPTER_ID.to_owned(),
         }
         .into();
+
+        let adapter = plugin.borrow_adapter_(ADAPTER_ID).unwrap();
+        adapter
+            .lock()
+            .await
+            .downcast_mut::<MockAdapter>()
+            .unwrap()
+            .adapter_helper
+            .expect_on_unload()
+            .times(1)
+            .returning(|| Ok(()));
 
         plugin
             .client
