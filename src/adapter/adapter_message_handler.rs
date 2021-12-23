@@ -4,7 +4,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{client::Client, device::device_message_handler, Adapter};
+use crate::{
+    client::Client,
+    device::device_message_handler,
+    message_handler::{MessageHandler, MessageResult},
+    Adapter,
+};
+use async_trait::async_trait;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
@@ -14,94 +20,73 @@ use webthings_gateway_ipc_types::{
     DeviceSetPropertyCommandMessageData, Message as IPCMessage,
 };
 
-pub(crate) async fn handle_message(
-    adapter: Arc<Mutex<Box<dyn Adapter>>>,
-    client: Arc<Mutex<Client>>,
-    message: IPCMessage,
-) -> Result<(), String> {
-    match &message {
-        IPCMessage::AdapterUnloadRequest(AdapterUnloadRequest { data, .. }) => {
-            log::info!("Received request to unload adapter '{}'", data.adapter_id);
+#[async_trait]
+impl MessageHandler for dyn Adapter {
+    async fn handle_message(&mut self, message: IPCMessage) -> Result<MessageResult, String> {
+        match &message {
+            IPCMessage::AdapterUnloadRequest(AdapterUnloadRequest { data, .. }) => {
+                log::info!("Received request to unload adapter '{}'", data.adapter_id);
 
-            let mut adapter = adapter.lock().await;
+                self.on_unload()
+                    .await
+                    .map_err(|err| format!("Could not unload adapter: {}", err))?;
 
-            adapter
-                .on_unload()
-                .await
-                .map_err(|err| format!("Could not unload adapter: {}", err))?;
+                self.adapter_handle_mut()
+                    .unload()
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
+            }
+            IPCMessage::DeviceSavedNotification(DeviceSavedNotification { data, .. }) => {
+                self.on_device_saved(data.device_id.clone(), data.device.clone())
+                    .await
+                    .map_err(|err| format!("Error during adapter.on_device_saved: {}", err))?;
+            }
+            IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand { data, .. }) => {
+                self.on_start_pairing(Duration::from_secs(data.timeout as u64))
+                    .await
+                    .map_err(|err| format!("Error during adapter.on_start_pairing: {}", err))?;
+            }
+            IPCMessage::AdapterCancelPairingCommand(_) => {
+                self.on_cancel_pairing()
+                    .await
+                    .map_err(|err| format!("Error during adapter.on_cancel_pairing: {}", err))?;
+            }
+            IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest { data, .. }) => {
+                self.on_remove_device(data.device_id.clone())
+                    .await
+                    .map_err(|err| format!("Could not execute remove device callback: {}", err))?;
 
-            adapter
-                .adapter_handle_mut()
-                .unload()
-                .await
-                .map_err(|err| format!("Could not send unload response: {}", err))?;
-
-            Ok(())
+                self.adapter_handle_mut()
+                    .remove_device(&data.device_id)
+                    .await
+                    .map_err(|err| {
+                        format!("Could not remove device from adapter handle: {}", err)
+                    })?;
+            }
+            IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
+                data: DeviceSetPropertyCommandMessageData { device_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
+                data: DeviceRequestActionRequestMessageData { device_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
+                data: DeviceRemoveActionRequestMessageData { device_id, .. },
+                ..
+            }) => {
+                self.adapter_handle_mut()
+                    .get_device(device_id)
+                    .ok_or_else(|| format!("Unknown device: {}", device_id))?
+                    .lock()
+                    .await
+                    .handle_message(message)
+                    .await?;
+            }
+            msg => return Err(format!("Unexpected msg: {:?}", msg)),
         }
-        IPCMessage::DeviceSavedNotification(DeviceSavedNotification { data, .. }) => {
-            adapter
-                .lock()
-                .await
-                .on_device_saved(data.device_id.clone(), data.device.clone())
-                .await
-                .map_err(|err| format!("Error during adapter.on_device_saved: {}", err))?;
-            Ok(())
-        }
-        IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand { data, .. }) => {
-            adapter
-                .lock()
-                .await
-                .on_start_pairing(Duration::from_secs(data.timeout as u64))
-                .await
-                .map_err(|err| format!("Error during adapter.on_start_pairing: {}", err))?;
-            Ok(())
-        }
-        IPCMessage::AdapterCancelPairingCommand(_) => {
-            adapter
-                .lock()
-                .await
-                .on_cancel_pairing()
-                .await
-                .map_err(|err| format!("Error during adapter.on_cancel_pairing: {}", err))?;
-            Ok(())
-        }
-        IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest { data, .. }) => {
-            let mut adapter = adapter.lock().await;
 
-            adapter
-                .on_remove_device(data.device_id.clone())
-                .await
-                .map_err(|err| format!("Could not execute remove device callback: {}", err))?;
-
-            adapter
-                .adapter_handle_mut()
-                .remove_device(&data.device_id)
-                .await
-                .map_err(|err| format!("Could not remove device from adapter handle: {}", err))?;
-
-            Ok(())
-        }
-        IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
-            data: DeviceSetPropertyCommandMessageData { device_id, .. },
-            ..
-        })
-        | IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
-            data: DeviceRequestActionRequestMessageData { device_id, .. },
-            ..
-        })
-        | IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
-            data: DeviceRemoveActionRequestMessageData { device_id, .. },
-            ..
-        }) => {
-            let device = adapter
-                .lock()
-                .await
-                .adapter_handle_mut()
-                .get_device(device_id);
-            let device = device.ok_or_else(|| format!("Unknown device: {}", device_id))?;
-            device_message_handler::handle_message(device, client.clone(), message).await
-        }
-        msg => Err(format!("Unexpected msg: {:?}", msg)),
+        Ok(MessageResult::Continue)
     }
 }
 
@@ -109,6 +94,7 @@ pub(crate) async fn handle_message(
 pub mod tests {
     use crate::{
         adapter::tests::{add_mock_device, MockAdapter},
+        message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
         Plugin,
     };

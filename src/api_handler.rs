@@ -6,7 +6,10 @@
 
 //! A module for everything related to WebthingsIO API Handlers.
 
-use crate::client::Client;
+use crate::{
+    client::Client,
+    message_handler::{MessageHandler, MessageResult},
+};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use serde_json::json;
@@ -91,64 +94,60 @@ impl ApiHandler for NoopApiHandler {
     }
 }
 
-pub(crate) async fn handle_message(
-    api_handler: Arc<Mutex<dyn ApiHandler>>,
-    client: Arc<Mutex<Client>>,
-    message: IPCMessage,
-) -> Result<(), String> {
-    match message {
-        IPCMessage::ApiHandlerUnloadRequest(ApiHandlerUnloadRequest { data, .. }) => {
-            log::info!("Received request to unload api handler");
+#[async_trait]
+impl MessageHandler for (Arc<Mutex<dyn ApiHandler>>, Arc<Mutex<Client>>) {
+    async fn handle_message(&mut self, message: IPCMessage) -> Result<MessageResult, String> {
+        let (api_handler, client) = self;
+        let mut api_handler = api_handler.lock().await;
+        let mut client = client.lock().await;
 
-            api_handler
-                .lock()
-                .await
-                .on_unload()
-                .await
-                .map_err(|err| format!("Could not unload api handler: {}", err))?;
+        match message {
+            IPCMessage::ApiHandlerUnloadRequest(ApiHandlerUnloadRequest { data, .. }) => {
+                log::info!("Received request to unload api handler");
 
-            let message = ApiHandlerUnloadResponseMessageData {
-                plugin_id: data.plugin_id.clone(),
-                package_name: data.plugin_id.clone(),
+                api_handler
+                    .on_unload()
+                    .await
+                    .map_err(|err| format!("Could not unload api handler: {}", err))?;
+
+                let message = ApiHandlerUnloadResponseMessageData {
+                    plugin_id: data.plugin_id.clone(),
+                    package_name: data.plugin_id.clone(),
+                }
+                .into();
+
+                client
+                    .send_message(&message)
+                    .await
+                    .map_err(|err| format!("Could not send unload response: {}", err))?;
             }
-            .into();
+            IPCMessage::ApiHandlerApiRequest(ApiHandlerApiRequest { data, .. }) => {
+                let result = api_handler.handle_request(data.request).await;
 
-            client
-                .lock()
-                .await
-                .send_message(&message)
-                .await
-                .map_err(|err| format!("Could not send unload response: {}", err))?;
+                let response = result.clone().unwrap_or_else(|err| ApiResponse {
+                    content: serde_json::Value::String(err),
+                    content_type: json!("text/plain"),
+                    status: 500,
+                });
+                let message = ApiHandlerApiResponseMessageData {
+                    message_id: data.message_id,
+                    package_name: data.plugin_id.clone(),
+                    plugin_id: data.plugin_id.clone(),
+                    response,
+                }
+                .into();
 
-            Ok(())
-        }
-        IPCMessage::ApiHandlerApiRequest(ApiHandlerApiRequest { data, .. }) => {
-            let result = api_handler.lock().await.handle_request(data.request).await;
+                client
+                    .send_message(&message)
+                    .await
+                    .map_err(|err| format!("{:?}", err))?;
 
-            let response = result.clone().unwrap_or_else(|err| ApiResponse {
-                content: serde_json::Value::String(err),
-                content_type: json!("text/plain"),
-                status: 500,
-            });
-            let message = ApiHandlerApiResponseMessageData {
-                message_id: data.message_id,
-                package_name: data.plugin_id.clone(),
-                plugin_id: data.plugin_id.clone(),
-                response,
+                result
+                    .map_err(|err| format!("Error during api_handler.handle_request: {}", err))?;
             }
-            .into();
-
-            client
-                .lock()
-                .await
-                .send_message(&message)
-                .await
-                .map_err(|err| format!("{:?}", err))?;
-
-            result.map_err(|err| format!("Error during api_handler.handle_request: {}", err))?;
-            Ok(())
+            msg => return Err(format!("Unexpected msg: {:?}", msg)),
         }
-        msg => Err(format!("Unexpected msg: {:?}", msg)),
+        Ok(MessageResult::Continue)
     }
 }
 
@@ -156,6 +155,7 @@ pub(crate) async fn handle_message(
 pub(crate) mod tests {
     use crate::{
         api_handler::{ApiHandler, ApiRequest, ApiResponse},
+        message_handler::MessageHandler,
         plugin::tests::{plugin, set_mock_api_handler},
         Plugin,
     };

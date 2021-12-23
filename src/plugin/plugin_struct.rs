@@ -4,14 +4,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-//! Connection to the WebthingsIO gateway.
-
 use crate::{
     adapter::adapter_message_handler,
     api_handler::{self, ApiHandler},
     client::Client,
     database::Database,
     error::WebthingsError,
+    message_handler::{MessageHandler, MessageResult},
+    plugin::{plugin_connection, PluginStream},
     Adapter, AdapterHandle,
 };
 use mockall_double::double;
@@ -34,136 +34,6 @@ use webthings_gateway_ipc_types::{
 
 const DONT_RESTART_EXIT_CODE: i32 = 100;
 
-mod double {
-    #[cfg(not(test))]
-    pub mod plugin {
-        use crate::{api_handler::NoopApiHandler, client::Client, error::WebthingsError, Plugin};
-        use futures::stream::{SplitStream, StreamExt};
-        use std::{collections::HashMap, str::FromStr, sync::Arc};
-        use tokio::{net::TcpStream, sync::Mutex};
-        use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-        use url::Url;
-        use webthings_gateway_ipc_types::{
-            Message as IPCMessage, PluginRegisterRequestMessageData,
-            PluginRegisterResponseMessageData,
-        };
-
-        pub(crate) type PluginStream = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-        const GATEWAY_URL: &str = "ws://localhost:9500";
-
-        /// Connect to a WebthingsIO gateway and create a new [plugin][Plugin].
-        pub async fn connect(plugin_id: impl Into<String>) -> Result<Plugin, WebthingsError> {
-            let plugin_id = plugin_id.into();
-            let url = Url::parse(GATEWAY_URL).expect("Could not parse url");
-
-            let (socket, _) = connect_async(url).await.map_err(WebthingsError::Connect)?;
-
-            let (sink, mut stream) = socket.split();
-            let mut client = Client::new(sink);
-
-            let message: IPCMessage = PluginRegisterRequestMessageData {
-                plugin_id: plugin_id.clone(),
-            }
-            .into();
-
-            client.send_message(&message).await?;
-
-            let PluginRegisterResponseMessageData {
-                gateway_version: _,
-                plugin_id: _,
-                preferences,
-                user_profile,
-            } = loop {
-                match read(&mut stream).await {
-                    None => {}
-                    Some(result) => match result {
-                        Ok(IPCMessage::PluginRegisterResponse(msg)) => {
-                            break msg.data;
-                        }
-                        Ok(msg) => {
-                            log::warn!("Received unexpected message {:?}", msg);
-                        }
-                        Err(err) => log::error!("Could not read message: {}", err),
-                    },
-                }
-            };
-
-            Ok(Plugin {
-                plugin_id,
-                preferences,
-                user_profile,
-                client: Arc::new(Mutex::new(client)),
-                stream,
-                adapters: HashMap::new(),
-                api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
-            })
-        }
-
-        pub(crate) async fn read(stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
-            stream.next().await.map(|result| match result {
-                Ok(msg) => {
-                    let json = msg
-                        .to_text()
-                        .map_err(|err| format!("Could not get text message: {:?}", err))?;
-
-                    log::trace!("Received message {}", json);
-
-                    IPCMessage::from_str(json)
-                        .map_err(|err| format!("Could not parse message: {:?}", err))
-                }
-                Err(err) => Err(err.to_string()),
-            })
-        }
-    }
-
-    #[cfg(test)]
-    pub mod mock_plugin {
-        use crate::{api_handler::NoopApiHandler, client::Client, Plugin};
-        use std::{collections::HashMap, sync::Arc};
-        use tokio::sync::Mutex;
-        use webthings_gateway_ipc_types::{Message as IPCMessage, Preferences, Units, UserProfile};
-
-        pub(crate) type PluginStream = ();
-
-        pub fn connect(plugin_id: impl Into<String>) -> Plugin {
-            let preferences = Preferences {
-                language: "en-US".to_owned(),
-                units: Units {
-                    temperature: "degree celsius".to_owned(),
-                },
-            };
-            let user_profile = UserProfile {
-                addons_dir: "".to_owned(),
-                base_dir: "".to_owned(),
-                config_dir: "".to_owned(),
-                data_dir: "".to_owned(),
-                gateway_dir: "".to_owned(),
-                log_dir: "".to_owned(),
-                media_dir: "".to_owned(),
-            };
-            let client = Arc::new(Mutex::new(Client::new()));
-            Plugin {
-                plugin_id: plugin_id.into(),
-                preferences,
-                user_profile,
-                client,
-                stream: (),
-                adapters: HashMap::new(),
-                api_handler: Arc::new(Mutex::new(NoopApiHandler::new())),
-            }
-        }
-
-        pub(crate) async fn read(_stream: &mut PluginStream) -> Option<Result<IPCMessage, String>> {
-            None
-        }
-    }
-}
-
-#[double]
-use double::plugin;
-
-pub use plugin::*;
-
 /// A struct which represents a successfully established connection to a WebthingsIO gateway.
 ///
 /// # Examples
@@ -183,14 +53,8 @@ pub struct Plugin {
     pub user_profile: UserProfile,
     pub(crate) client: Arc<Mutex<Client>>,
     pub(crate) api_handler: Arc<Mutex<dyn ApiHandler>>,
-    stream: PluginStream,
-    adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
-}
-
-#[doc(hidden)]
-pub(crate) enum MessageResult {
-    Continue,
-    Terminate,
+    pub(crate) stream: PluginStream,
+    pub(crate) adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
 }
 
 impl Plugin {
@@ -199,7 +63,7 @@ impl Plugin {
     /// This will block your current thread.
     pub async fn event_loop(&mut self) {
         loop {
-            match read(&mut self.stream).await {
+            match plugin_connection::read(&mut self.stream).await {
                 None => {}
                 Some(result) => match result {
                     Ok(message) => match self.handle_message(message).await {
@@ -212,75 +76,6 @@ impl Plugin {
                     Err(err) => log::warn!("Could not read message: {}", err),
                 },
             }
-        }
-    }
-
-    pub(crate) async fn handle_message(
-        &mut self,
-        message: IPCMessage,
-    ) -> Result<MessageResult, String> {
-        match &message {
-            IPCMessage::PluginUnloadRequest(PluginUnloadRequest { data, .. }) => {
-                log::info!("Received request to unload plugin '{}'", data.plugin_id);
-
-                self.unload()
-                    .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
-
-                Ok(MessageResult::Terminate)
-            }
-            IPCMessage::AdapterUnloadRequest(AdapterUnloadRequest {
-                data: AdapterUnloadRequestMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::DeviceSavedNotification(DeviceSavedNotification {
-                data: DeviceSavedNotificationMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand {
-                data: AdapterStartPairingCommandMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::AdapterCancelPairingCommand(AdapterCancelPairingCommand {
-                data: AdapterCancelPairingCommandMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest {
-                data: AdapterRemoveDeviceRequestMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
-                data: DeviceSetPropertyCommandMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
-                data: DeviceRequestActionRequestMessageData { adapter_id, .. },
-                ..
-            })
-            | IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
-                data: DeviceRemoveActionRequestMessageData { adapter_id, .. },
-                ..
-            }) => {
-                let adapter = self
-                    .borrow_adapter(adapter_id)
-                    .map_err(|e| format!("{:?}", e))?;
-
-                adapter_message_handler::handle_message(
-                    adapter.clone(),
-                    self.client.clone(),
-                    message,
-                )
-                .await?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::ApiHandlerUnloadRequest(_) | IPCMessage::ApiHandlerApiRequest(_) => {
-                api_handler::handle_message(self.api_handler.clone(), self.client.clone(), message)
-                    .await?;
-
-                Ok(MessageResult::Continue)
-            }
-            msg => Err(format!("Unexpected msg: {:?}", msg)),
         }
     }
 
@@ -411,7 +206,7 @@ pub(crate) mod tests {
     use tokio::sync::Mutex;
     use webthings_gateway_ipc_types::{Message, PluginUnloadRequestMessageData};
 
-    pub(crate) async fn add_mock_adapter(
+    pub async fn add_mock_adapter(
         plugin: &mut Plugin,
         adapter_id: &str,
     ) -> Arc<Mutex<Box<dyn Adapter>>> {
@@ -438,7 +233,7 @@ pub(crate) mod tests {
             .unwrap()
     }
 
-    pub(crate) async fn set_mock_api_handler(plugin: &mut Plugin) {
+    pub async fn set_mock_api_handler(plugin: &mut Plugin) {
         let plugin_id = plugin.plugin_id.to_owned();
 
         plugin
@@ -475,29 +270,6 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_borrow_unknown_adapter(mut plugin: Plugin) {
         assert!(plugin.borrow_adapter(ADAPTER_ID).is_err());
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_unload(mut plugin: Plugin) {
-        let message: Message = PluginUnloadRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::PluginUnloadResponse(msg) => msg.data.plugin_id == PLUGIN_ID,
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
     }
 
     #[rstest]
