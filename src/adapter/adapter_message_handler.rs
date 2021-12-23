@@ -5,14 +5,11 @@
  */
 
 use crate::{
-    client::Client,
-    device::device_message_handler,
     message_handler::{MessageHandler, MessageResult},
     Adapter,
 };
 use async_trait::async_trait;
-use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::time::Duration;
 use webthings_gateway_ipc_types::{
     AdapterRemoveDeviceRequest, AdapterStartPairingCommand, AdapterUnloadRequest,
     DeviceRemoveActionRequest, DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,

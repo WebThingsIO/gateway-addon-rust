@@ -5,8 +5,7 @@
  */
 
 use crate::{
-    adapter::adapter_message_handler,
-    api_handler::{self, ApiHandler},
+    api_handler::ApiHandler,
     client::Client,
     database::Database,
     error::WebthingsError,
@@ -14,22 +13,12 @@ use crate::{
     plugin::{plugin_connection, PluginStream},
     Adapter, AdapterHandle,
 };
-use mockall_double::double;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
-    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand,
-    AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequest,
-    AdapterRemoveDeviceRequestMessageData, AdapterStartPairingCommand,
-    AdapterStartPairingCommandMessageData, AdapterUnloadRequest, AdapterUnloadRequestMessageData,
-    ApiHandlerAddedNotificationMessageData, DeviceRemoveActionRequest,
-    DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
-    DeviceRequestActionRequestMessageData, DeviceSavedNotification,
-    DeviceSavedNotificationMessageData, DeviceSetPropertyCommand,
-    DeviceSetPropertyCommandMessageData, Message, Message as IPCMessage,
-    PluginErrorNotificationMessageData, PluginUnloadRequest, PluginUnloadResponseMessageData,
-    Preferences, UserProfile,
+    AdapterAddedNotificationMessageData, ApiHandlerAddedNotificationMessageData, Message,
+    PluginErrorNotificationMessageData, PluginUnloadResponseMessageData, Preferences, UserProfile,
 };
 
 const DONT_RESTART_EXIT_CODE: i32 = 100;
@@ -204,7 +193,7 @@ pub(crate) mod tests {
     use rstest::{fixture, rstest};
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{Message, PluginUnloadRequestMessageData};
+    use webthings_gateway_ipc_types::Message;
 
     pub async fn add_mock_adapter(
         plugin: &mut Plugin,

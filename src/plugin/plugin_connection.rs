@@ -4,33 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    adapter::adapter_message_handler,
-    api_handler::{self, ApiHandler},
-    client::Client,
-    database::Database,
-    error::WebthingsError,
-    Adapter, AdapterHandle,
-};
 use mockall_double::double;
-use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
-use tokio::{sync::Mutex, time::sleep};
-use webthings_gateway_ipc_types::{
-    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand,
-    AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequest,
-    AdapterRemoveDeviceRequestMessageData, AdapterStartPairingCommand,
-    AdapterStartPairingCommandMessageData, AdapterUnloadRequest, AdapterUnloadRequestMessageData,
-    ApiHandlerAddedNotificationMessageData, DeviceRemoveActionRequest,
-    DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
-    DeviceRequestActionRequestMessageData, DeviceSavedNotification,
-    DeviceSavedNotificationMessageData, DeviceSetPropertyCommand,
-    DeviceSetPropertyCommandMessageData, Message, Message as IPCMessage,
-    PluginErrorNotificationMessageData, PluginUnloadRequest, PluginUnloadResponseMessageData,
-    Preferences, UserProfile,
-};
-
-const DONT_RESTART_EXIT_CODE: i32 = 100;
 
 mod double {
     #[cfg(not(test))]
