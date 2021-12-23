@@ -4,26 +4,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    client::Client,
-    device::{self, device_message_handler},
-    error::WebthingsError,
-    Adapter, Device, DeviceBuilder,
-};
-use as_any::{AsAny, Downcast};
-use async_trait::async_trait;
+use crate::{client::Client, error::WebthingsError, Adapter, Device, DeviceBuilder, DeviceHandle};
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
-    time::Duration,
 };
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
-    AdapterRemoveDeviceRequest, AdapterRemoveDeviceResponseMessageData, AdapterStartPairingCommand,
-    AdapterUnloadRequest, AdapterUnloadResponseMessageData, DeviceAddedNotificationMessageData,
-    DeviceRemoveActionRequest, DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
-    DeviceRequestActionRequestMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    DeviceSetPropertyCommandMessageData, DeviceWithoutId, Message, Message as IPCMessage,
+    AdapterRemoveDeviceResponseMessageData, AdapterUnloadResponseMessageData,
+    DeviceAddedNotificationMessageData, Message,
 };
 
 /// A struct which represents an instance of a WebthingsIO adapter.
@@ -71,7 +60,7 @@ impl AdapterHandle {
 
         let id = device_description.id.clone();
 
-        let device_handle = device::DeviceHandle::new(
+        let device_handle = DeviceHandle::new(
             self.client.clone(),
             self.weak.clone(),
             self.plugin_id.clone(),
@@ -156,22 +145,12 @@ impl AdapterHandle {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        client::Client,
-        device::tests::MockDeviceBuilder,
-        plugin::tests::{add_mock_adapter, plugin},
-        Adapter, AdapterHandle, Device, DeviceBuilder, Plugin,
+        client::Client, device::tests::MockDeviceBuilder, AdapterHandle, Device, DeviceBuilder,
     };
-    use as_any::Downcast;
-    use async_trait::async_trait;
-    use mockall::mock;
     use rstest::{fixture, rstest};
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{
-        AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
-        AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
-        DeviceSavedNotificationMessageData, DeviceWithoutId, Message,
-    };
+    use webthings_gateway_ipc_types::Message;
 
     pub async fn add_mock_device(
         adapter: &mut AdapterHandle,

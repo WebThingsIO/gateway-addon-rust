@@ -7,7 +7,7 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    adapter::{self, adapter_message_handler},
+    adapter::adapter_message_handler,
     api_handler::{self, ApiHandler},
     client::Client,
     database::Database,

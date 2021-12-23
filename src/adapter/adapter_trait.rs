@@ -6,27 +6,11 @@
 
 //! A module for everything related to WebthingsIO adapters.
 
-use crate::{
-    client::Client,
-    device::{self, device_message_handler},
-    error::WebthingsError,
-    AdapterHandle, Device, DeviceBuilder,
-};
+use crate::AdapterHandle;
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-    time::Duration,
-};
-use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::{
-    AdapterRemoveDeviceRequest, AdapterRemoveDeviceResponseMessageData, AdapterStartPairingCommand,
-    AdapterUnloadRequest, AdapterUnloadResponseMessageData, DeviceAddedNotificationMessageData,
-    DeviceRemoveActionRequest, DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
-    DeviceRequestActionRequestMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    DeviceSetPropertyCommandMessageData, DeviceWithoutId, Message, Message as IPCMessage,
-};
+use std::time::Duration;
+use webthings_gateway_ipc_types::DeviceWithoutId;
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
@@ -129,24 +113,11 @@ impl Downcast for dyn Adapter {}
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{
-        adapter::tests::add_mock_device,
-        client::Client,
-        device::tests::MockDeviceBuilder,
-        plugin::tests::{add_mock_adapter, plugin},
-        Adapter, AdapterHandle, Device, DeviceBuilder, Plugin,
-    };
-    use as_any::Downcast;
+    use crate::{Adapter, AdapterHandle};
     use async_trait::async_trait;
     use mockall::mock;
-    use rstest::{fixture, rstest};
-    use std::{sync::Arc, time::Duration};
-    use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{
-        AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
-        AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
-        DeviceSavedNotificationMessageData, DeviceWithoutId, Message,
-    };
+    use std::time::Duration;
+    use webthings_gateway_ipc_types::DeviceWithoutId;
 
     mock! {
         pub AdapterHelper {

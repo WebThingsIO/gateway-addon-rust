@@ -4,26 +4,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    client::Client,
-    device::{self, device_message_handler},
-    error::WebthingsError,
-    Adapter, Device, DeviceBuilder,
-};
-use as_any::{AsAny, Downcast};
-use async_trait::async_trait;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use crate::{client::Client, device::device_message_handler, Adapter};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
-    AdapterRemoveDeviceRequest, AdapterRemoveDeviceResponseMessageData, AdapterStartPairingCommand,
-    AdapterUnloadRequest, AdapterUnloadResponseMessageData, DeviceAddedNotificationMessageData,
+    AdapterRemoveDeviceRequest, AdapterStartPairingCommand, AdapterUnloadRequest,
     DeviceRemoveActionRequest, DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
     DeviceRequestActionRequestMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    DeviceSetPropertyCommandMessageData, DeviceWithoutId, Message, Message as IPCMessage,
+    DeviceSetPropertyCommandMessageData, Message as IPCMessage,
 };
 
 pub(crate) async fn handle_message(
@@ -121,17 +109,11 @@ pub(crate) async fn handle_message(
 pub mod tests {
     use crate::{
         adapter::tests::{add_mock_device, MockAdapter},
-        client::Client,
-        device::tests::MockDeviceBuilder,
         plugin::tests::{add_mock_adapter, plugin},
-        Adapter, AdapterHandle, Device, DeviceBuilder, Plugin,
+        Plugin,
     };
     use as_any::Downcast;
-    use async_trait::async_trait;
-    use mockall::mock;
-    use rstest::{fixture, rstest};
-    use std::{sync::Arc, time::Duration};
-    use tokio::sync::Mutex;
+    use rstest::rstest;
     use webthings_gateway_ipc_types::{
         AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
         AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
