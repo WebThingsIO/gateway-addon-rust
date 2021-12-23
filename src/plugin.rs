@@ -7,7 +7,7 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    adapter,
+    adapter::{self, adapter_message_handler},
     api_handler::{self, ApiHandler},
     client::Client,
     database::Database,
@@ -265,7 +265,12 @@ impl Plugin {
                     .borrow_adapter(adapter_id)
                     .map_err(|e| format!("{:?}", e))?;
 
-                adapter::handle_message(adapter.clone(), self.client.clone(), message).await?;
+                adapter_message_handler::handle_message(
+                    adapter.clone(),
+                    self.client.clone(),
+                    message,
+                )
+                .await?;
 
                 Ok(MessageResult::Continue)
             }
