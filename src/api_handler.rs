@@ -126,7 +126,7 @@ pub(crate) async fn handle_message(
             let result = api_handler.lock().await.handle_request(data.request).await;
 
             let response = result.clone().unwrap_or_else(|err| ApiResponse {
-                content: serde_json::Value::String(err.clone()),
+                content: serde_json::Value::String(err),
                 content_type: json!("text/plain"),
                 status: 500,
             });
