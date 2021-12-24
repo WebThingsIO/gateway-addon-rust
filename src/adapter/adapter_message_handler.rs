@@ -88,7 +88,7 @@ impl MessageHandler for dyn Adapter {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use crate::{
         adapter::tests::{add_mock_device, MockAdapter},
         message_handler::MessageHandler,

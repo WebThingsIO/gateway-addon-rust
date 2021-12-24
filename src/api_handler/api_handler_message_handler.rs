@@ -5,19 +5,14 @@
  */
 
 use crate::{
-    api_handler::ApiHandler,
+    api_handler::{ApiHandler, ApiResponse},
     client::Client,
     message_handler::{MessageHandler, MessageResult},
 };
-use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-/// An [ApiHandler](crate::api_handler::ApiHandler) request.
-pub use webthings_gateway_ipc_types::Request as ApiRequest;
-/// An [ApiHandler](crate::api_handler::ApiHandler) response.
-pub use webthings_gateway_ipc_types::Response as ApiResponse;
 use webthings_gateway_ipc_types::{
     ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, ApiHandlerUnloadRequest,
     ApiHandlerUnloadResponseMessageData, Message as IPCMessage,
@@ -81,16 +76,14 @@ impl MessageHandler for (Arc<Mutex<dyn ApiHandler>>, Arc<Mutex<Client>>) {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use crate::{
-        api_handler::{tests::MockApiHandler, ApiHandler, ApiRequest, ApiResponse},
+        api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
         message_handler::MessageHandler,
         plugin::tests::{plugin, set_mock_api_handler},
         Plugin,
     };
     use as_any::Downcast;
-    use async_trait::async_trait;
-    use mockall::mock;
     use rstest::rstest;
     use serde_json::json;
     use std::collections::BTreeMap;

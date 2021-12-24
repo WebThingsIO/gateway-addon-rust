@@ -4,23 +4,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{
-    client::Client,
-    message_handler::{MessageHandler, MessageResult},
-};
+use crate::api_handler::{ApiRequest, ApiResponse};
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
-use serde_json::json;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-/// An [ApiHandler](crate::api_handler::ApiHandler) request.
-pub use webthings_gateway_ipc_types::Request as ApiRequest;
-/// An [ApiHandler](crate::api_handler::ApiHandler) response.
-pub use webthings_gateway_ipc_types::Response as ApiResponse;
-use webthings_gateway_ipc_types::{
-    ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, ApiHandlerUnloadRequest,
-    ApiHandlerUnloadResponseMessageData, Message as IPCMessage,
-};
 
 /// A trait used to specify the behaviour of a WebthingsIO API Handlers.
 ///
@@ -94,21 +80,9 @@ impl ApiHandler for NoopApiHandler {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{
-        api_handler::{ApiHandler, ApiRequest, ApiResponse},
-        message_handler::MessageHandler,
-        plugin::tests::{plugin, set_mock_api_handler},
-        Plugin,
-    };
-    use as_any::Downcast;
+    use crate::api_handler::{ApiHandler, ApiRequest, ApiResponse};
     use async_trait::async_trait;
     use mockall::mock;
-    use rstest::rstest;
-    use serde_json::json;
-    use std::collections::BTreeMap;
-    use webthings_gateway_ipc_types::{
-        ApiHandlerApiRequestMessageData, ApiHandlerUnloadRequestMessageData, Message,
-    };
 
     mock! {
         pub ApiHandlerHelper {

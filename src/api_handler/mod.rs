@@ -11,6 +11,11 @@ mod api_handler_trait;
 
 pub use api_handler_trait::*;
 
+/// An [ApiHandler](crate::api_handler::ApiHandler) request.
+pub use webthings_gateway_ipc_types::Request as ApiRequest;
+/// An [ApiHandler](crate::api_handler::ApiHandler) response.
+pub use webthings_gateway_ipc_types::Response as ApiResponse;
+
 #[cfg(test)]
 pub(crate) mod tests {
     pub use super::api_handler_trait::tests::*;
