@@ -5,10 +5,11 @@
  */
 
 use crate::{
-    action::NoInput, actions, error::WebthingsError, event::NoData, events, plugin::connect,
-    properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
-    DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
-    Property, PropertyBuilder, PropertyDescription, PropertyHandle, adapter::AdapterHandleWrapper,
+    action::NoInput, actions, adapter::AdapterHandleWrapper, device::DeviceHandleWrapper,
+    error::WebthingsError, event::NoData, events, plugin::connect, properties, Action,
+    ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device, DeviceBuilder,
+    DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
+    PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use as_any::Downcast;
 use async_trait::async_trait;
@@ -96,11 +97,17 @@ impl ExampleDeviceBuilder {
 
 pub struct ExampleDevice(DeviceHandle);
 
-impl Device for ExampleDevice {
+impl DeviceHandleWrapper for ExampleDevice {
+    fn device_handle(&self) -> &DeviceHandle {
+        &self.0
+    }
+
     fn device_handle_mut(&mut self) -> &mut DeviceHandle {
         &mut self.0
     }
 }
+
+impl Device for ExampleDevice {}
 
 impl ExampleDevice {
     pub fn new(device_handle: DeviceHandle) -> Self {

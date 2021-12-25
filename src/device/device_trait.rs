@@ -10,26 +10,31 @@ use async_trait::async_trait;
 
 /// A trait used to specify the behaviour of a WoT device.
 ///
-/// Wraps a [device handle][DeviceHandle] and defines how to react on gateway requests. Built by a [device builder][crate::DeviceBuilder].
+/// Defines how to react on gateway requests. Built by a [device builder][crate::DeviceBuilder].
 ///
 /// # Examples
 /// ```
 /// # use gateway_addon_rust::prelude::*;
-/// struct ExampleDevice(DeviceHandle);
+/// # use async_trait::async_trait;
+/// #[device]
+/// struct ExampleDevice;
 ///
-/// impl Device for ExampleDevice {
-///     fn device_handle_mut(&mut self) -> &mut DeviceHandle {
-///         &mut self.0
-///     }
-/// }
+/// #[async_trait]
+/// impl Device for ExampleDevice {}
 /// ```
 #[async_trait]
-pub trait Device: Send + Sync + AsAny + 'static {
-    /// Return the wrapped [device handle][DeviceHandle].
-    fn device_handle_mut(&mut self) -> &mut DeviceHandle;
-}
+pub trait Device: DeviceHandleWrapper + Send + Sync + AsAny + 'static {}
 
 impl Downcast for dyn Device {}
+
+/// A trait used to wrap a [device handle][DeviceHandle].
+pub trait DeviceHandleWrapper {
+    /// Return a reference to the wrapped [device handle][DeviceHandle].
+    fn device_handle(&self) -> &DeviceHandle;
+
+    /// Return a mutable reference to the wrapped [device handle][DeviceHandle].
+    fn device_handle_mut(&mut self) -> &mut DeviceHandle;
+}
 
 #[cfg(test)]
 pub(crate) mod tests {
