@@ -38,7 +38,7 @@ pub trait DeviceHandleWrapper {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::device::{Device, DeviceHandle};
+    use crate::device::{Device, DeviceHandle, DeviceHandleWrapper};
 
     pub struct MockDevice {
         device_handle: DeviceHandle,
@@ -65,9 +65,15 @@ pub(crate) mod tests {
         }
     }
 
-    impl Device for MockDevice {
+    impl DeviceHandleWrapper for MockDevice {
+        fn device_handle(&self) -> &DeviceHandle {
+            &self.device_handle
+        }
+
         fn device_handle_mut(&mut self) -> &mut DeviceHandle {
             &mut self.device_handle
         }
     }
+
+    impl Device for MockDevice {}
 }
