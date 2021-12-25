@@ -45,6 +45,17 @@ fn alter_struct(input: TokenStream, name_snail_case: &str, name_camel_case: &str
                     &mut self.#field_name
                 }
             }
+            impl std::ops::Deref for #struct_name {
+                type Target = #struct_handle;
+                fn deref(&self) -> &Self::Target {
+                    &self.#field_name
+                }
+            }
+            impl std::ops::DerefMut for #struct_name {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.#field_name
+                }
+            }
         }
         .into()
     } else {
