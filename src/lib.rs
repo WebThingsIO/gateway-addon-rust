@@ -46,6 +46,7 @@ pub mod prelude {
             self, Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle,
         },
     };
+    pub use gateway_addon_rust_codegen::*;
 }
 
 pub use prelude::*;

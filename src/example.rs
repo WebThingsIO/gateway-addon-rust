@@ -8,7 +8,7 @@ use crate::{
     action::NoInput, actions, error::WebthingsError, event::NoData, events, plugin::connect,
     properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
     DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
-    Property, PropertyBuilder, PropertyDescription, PropertyHandle,
+    Property, PropertyBuilder, PropertyDescription, PropertyHandle, adapter::AdapterHandleWrapper,
 };
 use as_any::Downcast;
 use async_trait::async_trait;
@@ -32,11 +32,17 @@ pub async fn main() -> Result<(), WebthingsError> {
 
 pub struct ExampleAdapter(AdapterHandle);
 
-impl Adapter for ExampleAdapter {
+impl AdapterHandleWrapper for ExampleAdapter {
+    fn adapter_handle(&self) -> &AdapterHandle {
+        &self.0
+    }
+
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
         &mut self.0
     }
 }
+
+impl Adapter for ExampleAdapter {}
 
 impl ExampleAdapter {
     pub fn new(adapter_handle: AdapterHandle) -> Self {

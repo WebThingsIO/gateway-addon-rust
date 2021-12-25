@@ -14,27 +14,19 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
-/// Wraps an [adapter handle][AdapterHandle] and defines how to react on gateway requests. Created through a [plugin][crate::Plugin].
+/// Defines how to react on gateway requests. Created through a [plugin][crate::Plugin].
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, error::WebthingsError};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, error::WebthingsError, adapter::AdapterHandleWrapper};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
-/// struct ExampleAdapter(AdapterHandle);
+/// #[adapter]
+/// struct ExampleAdapter;
 ///
 /// #[async_trait]
-/// impl Adapter for ExampleAdapter {
-///     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
-///         &mut self.0
-///     }
-///
-///     async fn on_remove_device(&mut self, device_id: String) -> Result<(), String> {
-///         log::debug!("Device {} removed", device_id);
-///         Ok(())
-///     }
-/// }
+/// impl Adapter for ExampleAdapter {}
 ///
 /// impl ExampleAdapter {
 /// #   pub fn new(adapter_handle: AdapterHandle) -> Self {
@@ -67,10 +59,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 /// }
 /// ```
 #[async_trait]
-pub trait Adapter: Send + Sync + AsAny + 'static {
-    /// Return the wrapped [adapter handle][AdapterHandle].
-    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
-
+pub trait Adapter: AdapterHandleWrapper + Send + Sync + AsAny + 'static {
     /// Called when this Adapter should be unloaded.
     async fn on_unload(&mut self) -> Result<(), String> {
         Ok(())
@@ -111,9 +100,18 @@ pub trait Adapter: Send + Sync + AsAny + 'static {
 
 impl Downcast for dyn Adapter {}
 
+/// A trait used to wrap an [adapter handle][AdapterHandle].
+pub trait AdapterHandleWrapper {
+    /// Return a reference to the wrapped [adapter handle][AdapterHandle].
+    fn adapter_handle(&self) -> &AdapterHandle;
+
+    /// Return a mutable reference to the wrapped [adapter handle][AdapterHandle].
+    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{Adapter, AdapterHandle};
+    use crate::{adapter::AdapterHandleWrapper, Adapter, AdapterHandle};
     use async_trait::async_trait;
     use mockall::mock;
     use std::time::Duration;
@@ -147,12 +145,18 @@ pub(crate) mod tests {
         }
     }
 
-    #[async_trait]
-    impl Adapter for MockAdapter {
+    impl AdapterHandleWrapper for MockAdapter {
+        fn adapter_handle(&self) -> &AdapterHandle {
+            &self.adapter_handle
+        }
+
         fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
             &mut self.adapter_handle
         }
+    }
 
+    #[async_trait]
+    impl Adapter for MockAdapter {
         async fn on_unload(&mut self) -> Result<(), String> {
             self.adapter_helper.on_unload().await
         }

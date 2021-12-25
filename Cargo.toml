@@ -19,6 +19,7 @@ jsonschema = "0.12.1"
 chrono = "0.4.19"
 as-any = "0.2.0"
 mockall_double = "0.2.0"
+gateway-addon-rust-codegen = { path = "gateway-addon-rust-codegen" }
 
 [dependencies.serde]
 version = "1.0"
