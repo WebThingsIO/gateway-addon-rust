@@ -9,6 +9,7 @@
 mod device_builder;
 mod device_description;
 mod device_handle;
+pub(crate) mod device_message_handler;
 mod device_trait;
 
 pub use device_builder::*;

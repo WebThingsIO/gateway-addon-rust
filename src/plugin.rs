@@ -7,27 +7,29 @@
 //! Connection to the WebthingsIO gateway.
 
 use crate::{
-    api_handler::{ApiHandler, ApiResponse},
+    adapter,
+    api_handler::{self, ApiHandler},
     client::Client,
     database::Database,
     error::WebthingsError,
     Adapter, AdapterHandle,
 };
-use futures::prelude::*;
 use mockall_double::double;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::json;
 use std::{collections::HashMap, path::PathBuf, process, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 use webthings_gateway_ipc_types::{
-    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand, AdapterRemoveDeviceRequest,
-    AdapterStartPairingCommand, AdapterUnloadRequest, ApiHandlerAddedNotificationMessageData,
-    ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, ApiHandlerUnloadRequest,
-    ApiHandlerUnloadResponseMessageData, DeviceRemoveActionRequest,
-    DeviceRemoveActionResponseMessageData, DeviceRequestActionRequest,
-    DeviceRequestActionResponseMessageData, DeviceSavedNotification, DeviceSetPropertyCommand,
-    Message, Message as IPCMessage, PluginErrorNotificationMessageData, PluginUnloadRequest,
-    PluginUnloadResponseMessageData, Preferences, UserProfile,
+    AdapterAddedNotificationMessageData, AdapterCancelPairingCommand,
+    AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequest,
+    AdapterRemoveDeviceRequestMessageData, AdapterStartPairingCommand,
+    AdapterStartPairingCommandMessageData, AdapterUnloadRequest, AdapterUnloadRequestMessageData,
+    ApiHandlerAddedNotificationMessageData, DeviceRemoveActionRequest,
+    DeviceRemoveActionRequestMessageData, DeviceRequestActionRequest,
+    DeviceRequestActionRequestMessageData, DeviceSavedNotification,
+    DeviceSavedNotificationMessageData, DeviceSetPropertyCommand,
+    DeviceSetPropertyCommandMessageData, Message, Message as IPCMessage,
+    PluginErrorNotificationMessageData, PluginUnloadRequest, PluginUnloadResponseMessageData,
+    Preferences, UserProfile,
 };
 
 const DONT_RESTART_EXIT_CODE: i32 = 100;
@@ -180,9 +182,9 @@ pub struct Plugin {
     pub preferences: Preferences,
     pub user_profile: UserProfile,
     pub(crate) client: Arc<Mutex<Client>>,
+    pub(crate) api_handler: Arc<Mutex<dyn ApiHandler>>,
     stream: PluginStream,
     adapters: HashMap<String, Arc<Mutex<Box<dyn Adapter>>>>,
-    api_handler: Arc<Mutex<dyn ApiHandler>>,
 }
 
 #[doc(hidden)]
@@ -213,119 +215,13 @@ impl Plugin {
         }
     }
 
-    #[doc(hidden)]
     pub(crate) async fn handle_message(
         &mut self,
         message: IPCMessage,
     ) -> Result<MessageResult, String> {
-        match message {
-            IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                let device = adapter
-                    .lock()
-                    .await
-                    .adapter_handle_mut()
-                    .get_device(&message.device_id);
-
-                if let Some(device) = device {
-                    let property = device
-                        .lock()
-                        .await
-                        .device_handle_mut()
-                        .get_property(&message.property_name)
-                        .ok_or_else(|| {
-                            format!(
-                                "Failed to update property {} of {}: not found",
-                                message.property_name, message.device_id,
-                            )
-                        })?;
-
-                    property
-                        .lock()
-                        .await
-                        .on_update(message.property_value.clone())
-                        .await?;
-
-                    property
-                        .lock()
-                        .await
-                        .property_handle_mut()
-                        .set_value(Some(message.property_value.clone()))
-                        .map_err(|err| {
-                            format!(
-                                "Failed to update property {} of {}: {}",
-                                message.property_name, message.device_id, err,
-                            )
-                        })
-                        .await?;
-                }
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::AdapterUnloadRequest(AdapterUnloadRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                log::info!(
-                    "Received request to unload adapter '{}'",
-                    message.adapter_id
-                );
-
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                adapter
-                    .lock()
-                    .await
-                    .on_unload()
-                    .await
-                    .map_err(|err| format!("Could not unload adapter: {}", err))?;
-
-                adapter
-                    .lock()
-                    .await
-                    .adapter_handle_mut()
-                    .unload()
-                    .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::ApiHandlerUnloadRequest(ApiHandlerUnloadRequest {
-                message_type: _,
-                data: _message,
-            }) => {
-                log::info!("Received request to unload api handler");
-
-                self.api_handler
-                    .lock()
-                    .await
-                    .on_unload()
-                    .await
-                    .map_err(|err| format!("Could not unload api handler: {}", err))?;
-
-                let message: Message = ApiHandlerUnloadResponseMessageData {
-                    plugin_id: self.plugin_id.clone(),
-                    package_name: self.plugin_id.clone(),
-                }
-                .into();
-                self.client
-                    .lock()
-                    .await
-                    .send_message(&message)
-                    .await
-                    .map_err(|err| format!("Could not send unload response: {}", err))?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::PluginUnloadRequest(PluginUnloadRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                log::info!("Received request to unload plugin '{}'", message.plugin_id);
+        match &message {
+            IPCMessage::PluginUnloadRequest(PluginUnloadRequest { data, .. }) => {
+                log::info!("Received request to unload plugin '{}'", data.plugin_id);
 
                 self.unload()
                     .await
@@ -333,266 +229,54 @@ impl Plugin {
 
                 Ok(MessageResult::Terminate)
             }
-            IPCMessage::DeviceSavedNotification(DeviceSavedNotification {
-                message_type: _,
-                data: message,
+            IPCMessage::AdapterUnloadRequest(AdapterUnloadRequest {
+                data: AdapterUnloadRequestMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceSavedNotification(DeviceSavedNotification {
+                data: DeviceSavedNotificationMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand {
+                data: AdapterStartPairingCommandMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::AdapterCancelPairingCommand(AdapterCancelPairingCommand {
+                data: AdapterCancelPairingCommandMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest {
+                data: AdapterRemoveDeviceRequestMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand {
+                data: DeviceSetPropertyCommandMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
+                data: DeviceRequestActionRequestMessageData { adapter_id, .. },
+                ..
+            })
+            | IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
+                data: DeviceRemoveActionRequestMessageData { adapter_id, .. },
+                ..
             }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
+                let adapter = self
+                    .borrow_adapter(adapter_id)
+                    .map_err(|e| format!("{:?}", e))?;
 
-                adapter
-                    .lock()
-                    .await
-                    .on_device_saved(message.device_id, message.device)
-                    .await
-                    .map_err(|err| format!("Error during adapter.on_device_saved: {}", err))?;
+                adapter::handle_message(adapter.clone(), self.client.clone(), message).await?;
 
                 Ok(MessageResult::Continue)
             }
-            IPCMessage::AdapterStartPairingCommand(AdapterStartPairingCommand {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                adapter
-                    .lock()
-                    .await
-                    .on_start_pairing(Duration::from_secs(message.timeout as u64))
-                    .await
-                    .map_err(|err| format!("Error during adapter.on_start_pairing: {}", err))?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::AdapterCancelPairingCommand(AdapterCancelPairingCommand {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                adapter
-                    .lock()
-                    .await
-                    .on_cancel_pairing()
-                    .await
-                    .map_err(|err| format!("Error during adapter.on_cancel_pairing: {}", err))?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::AdapterRemoveDeviceRequest(AdapterRemoveDeviceRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                let mut adapter = adapter.lock().await;
-
-                adapter
-                    .on_remove_device(message.device_id.clone())
-                    .await
-                    .map_err(|err| format!("Could not execute remove device callback: {}", err))?;
-
-                adapter
-                    .adapter_handle_mut()
-                    .remove_device(&message.device_id)
-                    .await
-                    .map_err(|err| {
-                        format!("Could not remove device from adapter handle: {}", err)
-                    })?;
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                let device = adapter
-                    .lock()
-                    .await
-                    .adapter_handle_mut()
-                    .get_device(&message.device_id);
-
-                if let Some(device) = device {
-                    let mut device = device.lock().await;
-                    let device_id = message.device_id;
-                    let action_name = message.action_name;
-                    let action_id = message.action_id;
-                    if let Err(err) = device
-                        .device_handle_mut()
-                        .request_action(action_name.clone(), action_id.clone(), message.input)
-                        .await
-                    {
-                        let message = DeviceRequestActionResponseMessageData {
-                            plugin_id: message.plugin_id,
-                            adapter_id: message.adapter_id,
-                            device_id: device_id.clone(),
-                            action_name: action_name.clone(),
-                            action_id: action_id.clone(),
-                            success: false,
-                        }
-                        .into();
-
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-
-                        return Err(format!(
-                            "Failed to request action {} for device {}: {:?}",
-                            action_name, device_id, err
-                        ));
-                    } else {
-                        let message = DeviceRequestActionResponseMessageData {
-                            plugin_id: message.plugin_id,
-                            adapter_id: message.adapter_id,
-                            device_id: device_id.clone(),
-                            action_name: action_name.clone(),
-                            action_id: action_id.clone(),
-                            success: true,
-                        }
-                        .into();
-
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-                    }
-                }
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                let adapter = self.borrow_adapter_(&message.adapter_id)?;
-
-                let device = adapter
-                    .lock()
-                    .await
-                    .adapter_handle_mut()
-                    .get_device(&message.device_id);
-
-                if let Some(device) = device {
-                    let mut device = device.lock().await;
-                    let device_id = message.device_id;
-                    let action_name = message.action_name;
-                    let action_id = message.action_id;
-                    if let Err(err) = device
-                        .device_handle_mut()
-                        .remove_action(action_name.clone(), action_id.clone())
-                        .await
-                    {
-                        let message = DeviceRemoveActionResponseMessageData {
-                            plugin_id: message.plugin_id,
-                            adapter_id: message.adapter_id,
-                            device_id: device_id.clone(),
-                            action_name: action_name.clone(),
-                            action_id: action_id.clone(),
-                            message_id: message.message_id,
-                            success: false,
-                        }
-                        .into();
-
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-
-                        return Err(format!(
-                            "Failed to remove action {} ({}) for device {}: {:?}",
-                            action_name, action_id, device_id, err
-                        ));
-                    } else {
-                        let message = DeviceRemoveActionResponseMessageData {
-                            plugin_id: message.plugin_id,
-                            adapter_id: message.adapter_id,
-                            device_id: device_id.clone(),
-                            action_name: action_name.clone(),
-                            action_id: action_id.clone(),
-                            message_id: message.message_id,
-                            success: true,
-                        }
-                        .into();
-
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-                    }
-                }
-
-                Ok(MessageResult::Continue)
-            }
-            IPCMessage::ApiHandlerApiRequest(ApiHandlerApiRequest {
-                message_type: _,
-                data: message,
-            }) => {
-                match self
-                    .api_handler
-                    .lock()
-                    .await
-                    .handle_request(message.request)
-                    .await
-                {
-                    Ok(response) => {
-                        let message = ApiHandlerApiResponseMessageData {
-                            message_id: message.message_id,
-                            package_name: self.plugin_id.clone(),
-                            plugin_id: self.plugin_id.clone(),
-                            response,
-                        }
-                        .into();
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-                    }
-                    Err(err) => {
-                        let message = ApiHandlerApiResponseMessageData {
-                            message_id: message.message_id,
-                            package_name: self.plugin_id.clone(),
-                            plugin_id: self.plugin_id.clone(),
-                            response: ApiResponse {
-                                content: serde_json::Value::String(err.clone()),
-                                content_type: json!("text/plain"),
-                                status: 500,
-                            },
-                        }
-                        .into();
-                        self.client
-                            .lock()
-                            .await
-                            .send_message(&message)
-                            .await
-                            .map_err(|err| format!("{:?}", err))?;
-                        return Err(format!("Error during api_handler.handle_request: {}", err));
-                    }
-                }
+            IPCMessage::ApiHandlerUnloadRequest(_) | IPCMessage::ApiHandlerApiRequest(_) => {
+                api_handler::handle_message(self.api_handler.clone(), self.client.clone(), message)
+                    .await?;
 
                 Ok(MessageResult::Continue)
             }
             msg => Err(format!("Unexpected msg: {:?}", msg)),
         }
-    }
-
-    fn borrow_adapter_(
-        &mut self,
-        adapter_id: &str,
-    ) -> Result<&mut Arc<Mutex<Box<dyn Adapter>>>, String> {
-        self.borrow_adapter(adapter_id)
-            .map_err(|e| format!("{:?}", e))
     }
 
     /// Borrow the adapter with the given id.
@@ -712,32 +396,17 @@ impl Plugin {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::{
-        action::{tests::MockAction, Input, NoInput},
-        adapter::tests::{add_mock_device, MockAdapter},
-        api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
-        device::tests::MockDevice,
-        event::NoData,
-        plugin::connect,
-        property::{self, tests::MockProperty},
-        Adapter, EventHandle, Plugin, PropertyHandle,
+        adapter::tests::MockAdapter, api_handler::tests::MockApiHandler, plugin::connect, Adapter,
+        Plugin,
     };
-    use as_any::Downcast;
     use rstest::{fixture, rstest};
-    use serde_json::json;
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
-    use webthings_gateway_ipc_types::{
-        AdapterCancelPairingCommandMessageData, AdapterRemoveDeviceRequestMessageData,
-        AdapterStartPairingCommandMessageData, AdapterUnloadRequestMessageData,
-        ApiHandlerApiRequestMessageData, ApiHandlerUnloadRequestMessageData,
-        DeviceRemoveActionRequestMessageData, DeviceRequestActionRequestMessageData,
-        DeviceSavedNotificationMessageData, DeviceSetPropertyCommandMessageData, DeviceWithoutId,
-        Message, PluginUnloadRequestMessageData,
-    };
+    use webthings_gateway_ipc_types::{Message, PluginUnloadRequestMessageData};
 
-    async fn add_mock_adapter(
+    pub(crate) async fn add_mock_adapter(
         plugin: &mut Plugin,
         adapter_id: &str,
     ) -> Arc<Mutex<Box<dyn Adapter>>> {
@@ -764,7 +433,7 @@ mod tests {
             .unwrap()
     }
 
-    async fn set_mock_api_handler(plugin: &mut Plugin) {
+    pub(crate) async fn set_mock_api_handler(plugin: &mut Plugin) {
         let plugin_id = plugin.plugin_id.to_owned();
 
         plugin
@@ -782,15 +451,13 @@ mod tests {
         plugin.set_api_handler(MockApiHandler::new()).await.unwrap()
     }
 
-    const PLUGIN_ID: &str = "plugin_id";
-    const ADAPTER_ID: &str = "adapter_id";
-    const DEVICE_ID: &str = "device_id";
-    const ACTION_ID: &str = "action_id";
-
     #[fixture]
-    fn plugin() -> Plugin {
+    pub(crate) fn plugin() -> Plugin {
         connect(PLUGIN_ID)
     }
+
+    const PLUGIN_ID: &str = "plugin_id";
+    const ADAPTER_ID: &str = "adapter_id";
 
     #[rstest]
     #[tokio::test]
@@ -803,246 +470,6 @@ mod tests {
     #[tokio::test]
     async fn test_borrow_unknown_adapter(mut plugin: Plugin) {
         assert!(plugin.borrow_adapter(ADAPTER_ID).is_err());
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_remove_device(mut plugin: Plugin) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        let message: Message = AdapterRemoveDeviceRequestMessageData {
-            device_id: DEVICE_ID.to_owned(),
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::AdapterRemoveDeviceResponse(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID
-                        && msg.data.adapter_id == ADAPTER_ID
-                        && msg.data.device_id == DEVICE_ID
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        {
-            let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
-            adapter
-                .adapter_helper
-                .expect_on_remove_device()
-                .withf(move |device_id| device_id == DEVICE_ID)
-                .times(1)
-                .returning(|_| Ok(()));
-        }
-
-        plugin.handle_message(message).await.unwrap();
-
-        assert!(adapter
-            .lock()
-            .await
-            .adapter_handle_mut()
-            .get_device(DEVICE_ID)
-            .is_none())
-    }
-
-    #[rstest]
-    #[case(MockDevice::ACTION_NOINPUT, json!(null), NoInput)]
-    #[case(MockDevice::ACTION_BOOL, json!(true), true)]
-    #[case(MockDevice::ACTION_U8, json!(112_u8), 112_u8)]
-    #[case(MockDevice::ACTION_I32, json!(21), 21)]
-    #[case(MockDevice::ACTION_F32, json!(-2.7_f32), -2.7_f32)]
-    #[case(MockDevice::ACTION_OPTI32, json!(11), Some(11))]
-    #[case(MockDevice::ACTION_OPTI32, json!(null), Option::<i32>::None)]
-    #[case(MockDevice::ACTION_STRING, json!("foo"), "foo".to_owned())]
-    #[tokio::test]
-    async fn test_request_action_perform<T: Input + PartialEq>(
-        #[case] action_name: &'static str,
-        #[case] action_input: serde_json::Value,
-        #[case] expected_input: T,
-        mut plugin: Plugin,
-    ) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        {
-            let mut device = device.lock().await;
-            let action = device.device_handle_mut().get_action(action_name).unwrap();
-            let mut action = action.lock().await;
-            let action = action.as_any_mut().downcast_mut::<MockAction<T>>().unwrap();
-            action
-                .action_helper
-                .expect_perform()
-                .withf(move |action_handle| action_handle.input == expected_input)
-                .times(1)
-                .returning(|_| Ok(()));
-        }
-
-        let message: Message = DeviceRequestActionRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-            device_id: DEVICE_ID.to_owned(),
-            action_name: action_name.to_owned(),
-            action_id: ACTION_ID.to_owned(),
-            input: action_input,
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::DeviceRequestActionResponse(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID
-                        && msg.data.adapter_id == ADAPTER_ID
-                        && msg.data.device_id == DEVICE_ID
-                        && msg.data.action_name == action_name
-                        && msg.data.action_id == ACTION_ID
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_action_cancel(mut plugin: Plugin) {
-        let message_id = 42;
-        let action_name = MockDevice::ACTION_I32.to_owned();
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        {
-            let mut device = device.lock().await;
-            let action = device
-                .device_handle_mut()
-                .get_action(action_name.to_owned())
-                .unwrap();
-            let mut action = action.lock().await;
-            let action = action
-                .as_any_mut()
-                .downcast_mut::<MockAction<i32>>()
-                .unwrap();
-            action
-                .action_helper
-                .expect_cancel()
-                .withf(move |action_id| action_id == ACTION_ID)
-                .times(1)
-                .returning(|_| Ok(()));
-        }
-
-        let message: Message = DeviceRemoveActionRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-            device_id: DEVICE_ID.to_owned(),
-            action_name: action_name.to_owned(),
-            action_id: ACTION_ID.to_owned(),
-            message_id,
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::DeviceRemoveActionResponse(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID
-                        && msg.data.adapter_id == ADAPTER_ID
-                        && msg.data.device_id == DEVICE_ID
-                        && msg.data.action_name == action_name
-                        && msg.data.action_id == ACTION_ID
-                        && msg.data.message_id == message_id
-                        && msg.data.success
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[case(MockDevice::PROPERTY_BOOL, json!(true), true)]
-    #[case(MockDevice::PROPERTY_U8, json!(112_u8), 112_u8)]
-    #[case(MockDevice::PROPERTY_I32, json!(21), 21)]
-    #[case(MockDevice::PROPERTY_F32, json!(-2.7_f32), -2.7_f32)]
-    #[case(MockDevice::PROPERTY_OPTI32, json!(11), Some(11))]
-    #[case(MockDevice::PROPERTY_OPTI32, json!(null), Option::<i32>::None)]
-    #[case(MockDevice::PROPERTY_STRING, json!("foo"), "foo".to_owned())]
-    #[tokio::test]
-    async fn test_request_property_update_value<T: property::Value + PartialEq>(
-        #[case] property_name: &'static str,
-        #[case] property_value: serde_json::Value,
-        #[case] expected_value: T,
-        mut plugin: Plugin,
-    ) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        {
-            let expected_value = expected_value.clone();
-            let mut device = device.lock().await;
-            let property = device
-                .device_handle_mut()
-                .get_property(property_name)
-                .unwrap();
-            let mut property = property.lock().await;
-            let property = property.downcast_mut::<MockProperty<T>>().unwrap();
-            property
-                .property_helper
-                .expect_on_update()
-                .withf(move |value| value == &expected_value)
-                .times(1)
-                .returning(|_| Ok(()));
-        }
-
-        let serialized_value = property::Value::serialize(expected_value.clone()).unwrap();
-
-        let message: Message = DeviceSetPropertyCommandMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-            device_id: DEVICE_ID.to_owned(),
-            property_name: property_name.to_owned(),
-            property_value,
-        }
-        .into();
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::DevicePropertyChangedNotification(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID
-                        && msg.data.adapter_id == ADAPTER_ID
-                        && msg.data.device_id == DEVICE_ID
-                        && msg.data.property.name == Some(property_name.to_owned())
-                        && msg.data.property.value == serialized_value
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
     }
 
     #[rstest]
@@ -1070,291 +497,8 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_request_adapter_unload(mut plugin: Plugin) {
-        add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-
-        let message: Message = AdapterUnloadRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-        }
-        .into();
-
-        let adapter = plugin.borrow_adapter_(ADAPTER_ID).unwrap();
-        adapter
-            .lock()
-            .await
-            .downcast_mut::<MockAdapter>()
-            .unwrap()
-            .adapter_helper
-            .expect_on_unload()
-            .times(1)
-            .returning(|| Ok(()));
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::AdapterUnloadResponse(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID && msg.data.adapter_id == ADAPTER_ID
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_adapter_start_pairing(mut plugin: Plugin) {
-        let timeout = 5000;
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-
-        let message: Message = AdapterStartPairingCommandMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-            timeout,
-        }
-        .into();
-
-        {
-            let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
-            adapter
-                .adapter_helper
-                .expect_on_start_pairing()
-                .withf(move |t| t.as_secs() == timeout as u64)
-                .times(1)
-                .returning(|_| Ok(()));
-        }
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_adapter_cancel_pairing(mut plugin: Plugin) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-
-        let message: Message = AdapterCancelPairingCommandMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-        }
-        .into();
-
-        {
-            let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
-            adapter
-                .adapter_helper
-                .expect_on_cancel_pairing()
-                .times(1)
-                .returning(|| Ok(()));
-        }
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_notification_device_saved(mut plugin: Plugin) {
-        let device_description = DeviceWithoutId {
-            at_context: None,
-            at_type: None,
-            actions: None,
-            base_href: None,
-            credentials_required: None,
-            description: None,
-            events: None,
-            links: None,
-            pin: None,
-            properties: None,
-            title: None,
-        };
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-
-        let message: Message = DeviceSavedNotificationMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            adapter_id: ADAPTER_ID.to_owned(),
-            device_id: DEVICE_ID.to_owned(),
-            device: device_description.clone(),
-        }
-        .into();
-
-        {
-            let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
-            adapter
-                .adapter_helper
-                .expect_on_device_saved()
-                .withf(move |id, description| id == DEVICE_ID && description == &device_description)
-                .times(1)
-                .returning(|_, _| Ok(()));
-        }
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
     async fn test_get_config_database(plugin: Plugin) {
         let db = plugin.get_config_database::<serde_json::Value>();
         assert_eq!(db.plugin_id, PLUGIN_ID);
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_device_has_weak_adapter_ref(mut plugin: Plugin) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        assert!(device
-            .lock()
-            .await
-            .device_handle_mut()
-            .adapter
-            .upgrade()
-            .is_some())
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_property_has_weak_device_ref(mut plugin: Plugin) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        let property = device
-            .lock()
-            .await
-            .device_handle_mut()
-            .get_property(MockDevice::PROPERTY_I32)
-            .unwrap();
-        assert!(property
-            .lock()
-            .await
-            .property_handle_mut()
-            .downcast_ref::<PropertyHandle<i32>>()
-            .unwrap()
-            .device
-            .upgrade()
-            .is_some())
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_event_has_weak_device_ref(mut plugin: Plugin) {
-        let adapter = add_mock_adapter(&mut plugin, ADAPTER_ID).await;
-        let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
-
-        let event = device
-            .lock()
-            .await
-            .device_handle_mut()
-            .get_event(MockDevice::EVENT_NODATA)
-            .unwrap();
-        assert!(event
-            .lock()
-            .await
-            .downcast_ref::<EventHandle<NoData>>()
-            .unwrap()
-            .device
-            .upgrade()
-            .is_some())
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_api_handler_unload(mut plugin: Plugin) {
-        set_mock_api_handler(&mut plugin).await;
-
-        let message: Message = ApiHandlerUnloadRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            package_name: PLUGIN_ID.to_owned(),
-        }
-        .into();
-
-        plugin
-            .api_handler
-            .lock()
-            .await
-            .downcast_mut::<MockApiHandler>()
-            .unwrap()
-            .api_handler_helper
-            .expect_on_unload()
-            .times(1)
-            .returning(|| Ok(()));
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::ApiHandlerUnloadResponse(msg) => msg.data.plugin_id == PLUGIN_ID,
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn test_request_api_handler_handle_request(mut plugin: Plugin) {
-        set_mock_api_handler(&mut plugin).await;
-
-        let request = ApiRequest {
-            body: BTreeMap::new(),
-            method: "GET".to_owned(),
-            path: "/".to_string(),
-            query: BTreeMap::new(),
-        };
-        let expected_response = ApiResponse {
-            content: json!("foo"),
-            content_type: json!("text/plain"),
-            status: 200,
-        };
-        let message_id = 42;
-
-        let message: Message = ApiHandlerApiRequestMessageData {
-            plugin_id: PLUGIN_ID.to_owned(),
-            package_name: PLUGIN_ID.to_owned(),
-            message_id,
-            request: request.clone(),
-        }
-        .into();
-
-        let expected_response_clone = expected_response.clone();
-        plugin
-            .api_handler
-            .lock()
-            .await
-            .downcast_mut::<MockApiHandler>()
-            .unwrap()
-            .api_handler_helper
-            .expect_handle_request()
-            .withf(move |req| req.method == request.method && req.path == request.path)
-            .times(1)
-            .returning(move |_| Ok(expected_response_clone.clone()));
-
-        plugin
-            .client
-            .lock()
-            .await
-            .expect_send_message()
-            .withf(move |msg| match msg {
-                Message::ApiHandlerApiResponse(msg) => {
-                    msg.data.plugin_id == PLUGIN_ID && msg.data.response == expected_response
-                }
-                _ => false,
-            })
-            .times(1)
-            .returning(|_| Ok(()));
-
-        plugin.handle_message(message).await.unwrap();
     }
 }
