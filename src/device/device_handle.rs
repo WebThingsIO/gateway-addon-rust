@@ -25,7 +25,7 @@ use webthings_gateway_ipc_types::{DeviceConnectedStateNotificationMessageData, M
 /// Use it to notify the gateway.
 #[derive(Clone)]
 pub struct DeviceHandle {
-    client: Arc<Mutex<Client>>,
+    pub(crate) client: Arc<Mutex<Client>>,
     pub(crate) weak: Weak<Mutex<Box<dyn Device>>>,
     /// Reference to the [adapter][crate::adapter::Adapter] which owns this device.
     pub adapter: Weak<Mutex<Box<dyn Adapter>>>,

@@ -20,6 +20,7 @@ pub mod event;
 #[cfg(not(test))]
 #[doc(hidden)]
 pub mod example;
+pub(crate) mod message_handler;
 pub mod plugin;
 pub mod property;
 pub mod type_;

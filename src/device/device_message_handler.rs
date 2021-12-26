@@ -4,118 +4,115 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{client::Client, Device};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::{
+    message_handler::{MessageHandler, MessageResult},
+    Device,
+};
+use async_trait::async_trait;
 use webthings_gateway_ipc_types::{
     DeviceRemoveActionRequest, DeviceRemoveActionResponseMessageData, DeviceRequestActionRequest,
     DeviceRequestActionResponseMessageData, DeviceSetPropertyCommand, Message as IPCMessage,
 };
 
-pub(crate) async fn handle_message(
-    device: Arc<Mutex<Box<dyn Device>>>,
-    client: Arc<Mutex<Client>>,
-    message: IPCMessage,
-) -> Result<(), String> {
-    match message {
-        IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand { data, .. }) => {
-            let property = device
-                .lock()
-                .await
-                .device_handle_mut()
-                .get_property(&data.property_name)
-                .ok_or_else(|| {
+#[async_trait]
+impl MessageHandler for dyn Device {
+    async fn handle_message(&mut self, message: IPCMessage) -> Result<MessageResult, String> {
+        match message {
+            IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand { data, .. }) => {
+                let property = self
+                    .device_handle_mut()
+                    .get_property(&data.property_name)
+                    .ok_or_else(|| {
+                        format!(
+                            "Could not update property {} of {}: not found",
+                            data.property_name, data.device_id,
+                        )
+                    })?;
+                let mut property = property.lock().await;
+
+                property.on_update(data.property_value.clone()).await?;
+
+                property
+                    .property_handle_mut()
+                    .set_value(Some(data.property_value.clone()))
+                    .await
+                    .map_err(|err| {
+                        format!(
+                            "Could not update property {} of {}: {}",
+                            data.property_name, data.device_id, err,
+                        )
+                    })?;
+            }
+            IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest { data, .. }) => {
+                let result = self
+                    .device_handle_mut()
+                    .request_action(
+                        data.action_name.clone(),
+                        data.action_id.clone(),
+                        data.input.clone(),
+                    )
+                    .await;
+
+                let reply = DeviceRequestActionResponseMessageData {
+                    plugin_id: data.plugin_id.clone(),
+                    adapter_id: data.adapter_id.clone(),
+                    device_id: data.device_id.clone(),
+                    action_name: data.action_name.clone(),
+                    action_id: data.action_id.clone(),
+                    success: result.is_ok(),
+                }
+                .into();
+
+                self.device_handle_mut()
+                    .client
+                    .lock()
+                    .await
+                    .send_message(&reply)
+                    .await
+                    .map_err(|err| format!("{:?}", err))?;
+
+                result.map_err(|err| {
                     format!(
-                        "Could not update property {} of {}: not found",
-                        data.property_name, data.device_id,
+                        "Failed to request action {} for device {}: {:?}",
+                        data.action_name, data.device_id, err
                     )
                 })?;
-            let mut property = property.lock().await;
+            }
+            IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest { data, .. }) => {
+                let result = self
+                    .device_handle_mut()
+                    .remove_action(data.action_name.clone(), data.action_id.clone())
+                    .await;
 
-            property.on_update(data.property_value.clone()).await?;
+                let reply = DeviceRemoveActionResponseMessageData {
+                    plugin_id: data.plugin_id.clone(),
+                    adapter_id: data.adapter_id.clone(),
+                    device_id: data.device_id.clone(),
+                    action_name: data.action_name.clone(),
+                    action_id: data.action_id.clone(),
+                    message_id: data.message_id,
+                    success: result.is_ok(),
+                }
+                .into();
 
-            property
-                .property_handle_mut()
-                .set_value(Some(data.property_value.clone()))
-                .await
-                .map_err(|err| {
+                self.device_handle_mut()
+                    .client
+                    .lock()
+                    .await
+                    .send_message(&reply)
+                    .await
+                    .map_err(|err| format!("{:?}", err))?;
+
+                result.map_err(|err| {
                     format!(
-                        "Could not update property {} of {}: {}",
-                        data.property_name, data.device_id, err,
+                        "Failed to remove action {} ({}) for device {}: {:?}",
+                        data.action_name, data.action_id, data.device_id, err
                     )
                 })?;
-            Ok(())
-        }
-        IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest { data, .. }) => {
-            let result = device
-                .lock()
-                .await
-                .device_handle_mut()
-                .request_action(
-                    data.action_name.clone(),
-                    data.action_id.clone(),
-                    data.input.clone(),
-                )
-                .await;
-
-            let reply = DeviceRequestActionResponseMessageData {
-                plugin_id: data.plugin_id.clone(),
-                adapter_id: data.adapter_id.clone(),
-                device_id: data.device_id.clone(),
-                action_name: data.action_name.clone(),
-                action_id: data.action_id.clone(),
-                success: result.is_ok(),
             }
-            .into();
-
-            client
-                .lock()
-                .await
-                .send_message(&reply)
-                .await
-                .map_err(|err| format!("{:?}", err))?;
-
-            result.map_err(|err| {
-                format!(
-                    "Failed to request action {} for device {}: {:?}",
-                    data.action_name, data.device_id, err
-                )
-            })
+            msg => return Err(format!("Unexpected msg: {:?}", msg)),
         }
-        IPCMessage::DeviceRemoveActionRequest(DeviceRemoveActionRequest { data, .. }) => {
-            let result = device
-                .lock()
-                .await
-                .device_handle_mut()
-                .remove_action(data.action_name.clone(), data.action_id.clone())
-                .await;
-
-            let reply = DeviceRemoveActionResponseMessageData {
-                plugin_id: data.plugin_id.clone(),
-                adapter_id: data.adapter_id.clone(),
-                device_id: data.device_id.clone(),
-                action_name: data.action_name.clone(),
-                action_id: data.action_id.clone(),
-                message_id: data.message_id,
-                success: result.is_ok(),
-            }
-            .into();
-
-            client
-                .lock()
-                .await
-                .send_message(&reply)
-                .await
-                .map_err(|err| format!("{:?}", err))?;
-
-            result.map_err(|err| {
-                format!(
-                    "Failed to remove action {} ({}) for device {}: {:?}",
-                    data.action_name, data.action_id, data.device_id, err
-                )
-            })
-        }
-        msg => Err(format!("Unexpected msg: {:?}", msg)),
+        Ok(MessageResult::Continue)
     }
 }
 
@@ -126,6 +123,7 @@ pub(crate) mod tests {
         adapter::tests::add_mock_device,
         device::tests::MockDevice,
         event::NoData,
+        message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
         property::{self, tests::MockProperty},
         EventHandle, Plugin, PropertyHandle,
