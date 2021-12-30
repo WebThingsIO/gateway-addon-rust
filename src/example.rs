@@ -5,11 +5,17 @@
  */
 
 use crate::{
-    action::NoInput, actions, adapter::AdapterHandleWrapper, device::DeviceHandleWrapper,
-    error::WebthingsError, event::NoData, events, plugin::connect, properties, Action,
-    ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device, DeviceBuilder,
-    DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties, Property,
-    PropertyBuilder, PropertyDescription, PropertyHandle,
+    action::NoInput,
+    actions,
+    adapter::{AdapterHandleWrapper, BuildAdapter},
+    device::DeviceHandleWrapper,
+    error::WebthingsError,
+    event::NoData,
+    events,
+    plugin::connect,
+    properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
+    DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
+    Property, PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use as_any::Downcast;
 use async_trait::async_trait;
@@ -18,12 +24,12 @@ use async_trait::async_trait;
 pub async fn main() -> Result<(), WebthingsError> {
     let mut plugin = connect("example-addon").await?;
     let adapter = plugin
-        .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new)
+        .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new())
         .await?;
     adapter
         .lock()
         .await
-        .downcast_mut::<ExampleAdapter>()
+        .downcast_mut::<BuiltExampleAdapter>()
         .unwrap()
         .init()
         .await?;
@@ -31,25 +37,55 @@ pub async fn main() -> Result<(), WebthingsError> {
     Ok(())
 }
 
-pub struct ExampleAdapter(AdapterHandle);
+pub struct ExampleAdapter;
 
-impl AdapterHandleWrapper for ExampleAdapter {
-    fn adapter_handle(&self) -> &AdapterHandle {
-        &self.0
-    }
+pub struct BuiltExampleAdapter {
+    data: ExampleAdapter,
+    adapter_handle: AdapterHandle,
+}
 
-    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
-        &mut self.0
+impl BuildAdapter for ExampleAdapter {
+    type BuiltAdapter = BuiltExampleAdapter;
+    fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
+        BuiltExampleAdapter {
+            data,
+            adapter_handle,
+        }
     }
 }
 
-impl Adapter for ExampleAdapter {}
-
-impl ExampleAdapter {
-    pub fn new(adapter_handle: AdapterHandle) -> Self {
-        Self(adapter_handle)
+impl AdapterHandleWrapper for BuiltExampleAdapter {
+    fn adapter_handle(&self) -> &AdapterHandle {
+        &self.adapter_handle
     }
 
+    fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
+        &mut self.adapter_handle
+    }
+}
+
+impl std::ops::Deref for BuiltExampleAdapter {
+    type Target = ExampleAdapter;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for BuiltExampleAdapter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl Adapter for BuiltExampleAdapter {}
+
+impl ExampleAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl BuiltExampleAdapter {
     async fn init(&mut self) -> Result<(), WebthingsError> {
         self.adapter_handle_mut()
             .add_device(ExampleDeviceBuilder::new())

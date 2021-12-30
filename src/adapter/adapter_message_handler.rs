@@ -90,7 +90,7 @@ impl MessageHandler for dyn Adapter {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::tests::{add_mock_device, MockAdapter},
+        adapter::tests::{add_mock_device, BuiltMockAdapter},
         message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
         Plugin,
@@ -138,9 +138,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_remove_device()
                 .withf(move |device_id| device_id == DEVICE_ID)
                 .times(1)
@@ -172,9 +171,8 @@ mod tests {
         adapter
             .lock()
             .await
-            .downcast_mut::<MockAdapter>()
+            .downcast_mut::<BuiltMockAdapter>()
             .unwrap()
-            .adapter_helper
             .expect_on_unload()
             .times(1)
             .returning(|| Ok(()));
@@ -211,9 +209,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_start_pairing()
                 .withf(move |t| t.as_secs() == timeout as u64)
                 .times(1)
@@ -236,9 +233,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_cancel_pairing()
                 .times(1)
                 .returning(|| Ok(()));
@@ -275,9 +271,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_device_saved()
                 .withf(move |id, description| id == DEVICE_ID && description == &device_description)
                 .times(1)

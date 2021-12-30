@@ -49,4 +49,5 @@ pub mod prelude {
     pub use gateway_addon_rust_codegen::*;
 }
 
+pub use gateway_addon_rust_codegen::*;
 pub use prelude::*;

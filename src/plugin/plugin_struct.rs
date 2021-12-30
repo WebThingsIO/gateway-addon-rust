@@ -5,6 +5,7 @@
  */
 
 use crate::{
+    adapter::BuildAdapter,
     api_handler::ApiHandler,
     client::Client,
     database::Database,
@@ -88,24 +89,18 @@ impl Plugin {
     /// # async fn main() -> Result<(), WebthingsError> {
     /// #   let mut plugin = connect("example-addon").await?;
     /// let adapter = plugin
-    ///     .create_adapter("example_adapter", "Example Adapter", |adapter_handle| {
-    ///         ExampleAdapter::new(adapter_handle)
-    ///     })
+    ///     .create_adapter("example_adapter", "Example Adapter", ExampleAdapter::new())
     ///     .await?;
     /// #   plugin.event_loop().await;
     /// #   Ok(())
     /// # }
     /// ```
-    pub async fn create_adapter<T, F>(
+    pub async fn create_adapter<T: BuildAdapter>(
         &mut self,
         adapter_id: impl Into<String>,
         name: impl Into<String>,
-        constructor: F,
-    ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, WebthingsError>
-    where
-        T: Adapter,
-        F: FnOnce(AdapterHandle) -> T,
-    {
+        adapter: T,
+    ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, WebthingsError> {
         let adapter_id = adapter_id.into();
 
         let message: Message = AdapterAddedNotificationMessageData {
@@ -125,7 +120,7 @@ impl Plugin {
         );
 
         let adapter: Arc<Mutex<Box<dyn Adapter>>> =
-            Arc::new(Mutex::new(Box::new(constructor(adapter_handle))));
+            Arc::new(Mutex::new(Box::new(T::build(adapter, adapter_handle))));
         let adapter_weak = Arc::downgrade(&adapter);
         adapter.lock().await.adapter_handle_mut().weak = adapter_weak;
         self.adapters.insert(adapter_id, adapter.clone());
@@ -217,7 +212,7 @@ pub(crate) mod tests {
             .returning(|_| Ok(()));
 
         plugin
-            .create_adapter(adapter_id, adapter_id, MockAdapter::new)
+            .create_adapter(adapter_id, adapter_id, MockAdapter::new())
             .await
             .unwrap()
     }

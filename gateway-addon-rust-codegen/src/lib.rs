@@ -1,118 +1,143 @@
-use proc_macro::{self, TokenStream};
+use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::str::FromStr;
-use syn::{parse::Parser, parse_macro_input, DeriveInput};
+use syn::DeriveInput;
 
+/// Use this on a struct to generate a built adapter around it, including useful impls.
+/// 
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::prelude::*;
+/// # use async_trait::async_trait;
+/// #[adapter]
+/// struct ExampleAdapter { foo: i32 }
+/// 
+/// #[async_trait]
+/// impl Adapter for BuiltExampleAdapter {
+///     async fn on_unload(&mut self) -> Result<(), String> {
+///         println!("Foo: {}", self.foo);
+///         Ok(())
+///     }
+/// }
+/// ```
+/// will expand to
+/// ```
+/// # use gateway_addon_rust::{prelude::*, adapter::AdapterHandleWrapper};
+/// # use std::ops::{Deref, DerefMut};
+/// # use async_trait::async_trait;
+/// struct ExampleAdapter { foo: i32 }
+/// 
+/// struct BuiltExampleAdapter{
+///     data: ExampleAdapter,
+///     adapter_handle: AdapterHandle
+/// }
+/// 
+/// impl AdapterHandleWrapper for BuiltExampleAdapter {
+///     fn adapter_handle(&self) -> &AdapterHandle {
+///         &self.adapter_handle
+///     }
+///     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
+///         &mut self.adapter_handle
+///     }
+/// }
+/// 
+/// impl BuildAdapter for ExampleAdapter {
+///     type BuiltAdapter = BuiltExampleAdapter;
+///     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
+///         BuiltExampleAdapter { data, adapter_handle }
+///     }
+/// }
+/// 
+/// impl Deref for BuiltExampleAdapter {
+///     type Target = ExampleAdapter;
+///     fn deref(&self) -> &Self::Target {
+///         &self.data
+///     }
+/// }
+/// 
+/// impl DerefMut for BuiltExampleAdapter {
+///     fn deref_mut(&mut self) -> &mut Self::Target {
+///         &mut self.data
+///     }
+/// }
+/// 
+/// #[async_trait]
+/// impl Adapter for BuiltExampleAdapter {
+///     // ...
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn adapter(_args: TokenStream, input: TokenStream) -> TokenStream {
-    alter_struct(input, "adapter", "Adapter")
+    apply_macro(input, "adapter", "Adapter")
 }
 
 #[proc_macro_attribute]
 pub fn device(_args: TokenStream, input: TokenStream) -> TokenStream {
-    alter_struct(input, "device", "Device")
+    apply_macro(input, "device", "Device")
 }
 
-fn alter_struct(input: TokenStream, name_snail_case: &str, name_camel_case: &str) -> TokenStream {
-    let trait_handle_wrapper = proc_macro2::TokenStream::from_str(&format!(
-        "gateway_addon_rust::{}::{}HandleWrapper",
-        name_snail_case, name_camel_case
-    ))
-    .unwrap();
-    let struct_handle = proc_macro2::TokenStream::from_str(&format!(
-        "gateway_addon_rust::{}::{}Handle",
-        name_snail_case, name_camel_case
-    ))
-    .unwrap();
-    let fn_handle =
-        proc_macro2::TokenStream::from_str(&format!("{}_handle", name_snail_case)).unwrap();
-    let fn_handle_mut =
-        proc_macro2::TokenStream::from_str(&format!("{}_handle_mut", name_snail_case)).unwrap();
-
-    let mut ast = parse_macro_input!(input as DeriveInput);
-    if let syn::Data::Struct(ref mut struct_data) = &mut ast.data {
-        let struct_name = ast.ident.clone();
-        let field_name = field_name(struct_data, name_snail_case);
-        add_struct_field(struct_data, &field_name, struct_handle.clone());
-
-        quote! {
-            #ast
-            impl #trait_handle_wrapper for #struct_name {
-                fn #fn_handle(&self) -> &#struct_handle {
-                    &self.#field_name
-                }
-                fn #fn_handle_mut(&mut self) -> &mut #struct_handle {
-                    &mut self.#field_name
-                }
-            }
-            impl std::ops::Deref for #struct_name {
-                type Target = #struct_handle;
-                fn deref(&self) -> &Self::Target {
-                    &self.#field_name
-                }
-            }
-            impl std::ops::DerefMut for #struct_name {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.#field_name
-                }
-            }
-        }
-        .into()
+fn apply_macro(input: TokenStream, name_snail_case: &str, name_camel_case: &str) -> TokenStream {
+    if let Ok(ast) = syn::parse2::<DeriveInput>(input.into()) {
+        alter_struct(ast, name_snail_case, name_camel_case).into()
     } else {
         panic!("`{}` has to be used with structs", name_snail_case)
     }
 }
 
-fn field_name(struct_data: &mut syn::DataStruct, identifier: &str) -> syn::Member {
-    match &mut struct_data.fields {
-        syn::Fields::Named(_) => syn::Member::Named(syn::Ident::new(
-            &format!("{}_handle", identifier),
-            proc_macro2::Span::call_site(),
-        )),
-        syn::Fields::Unnamed(fields) => syn::Member::Unnamed(syn::Index {
-            index: fields.unnamed.len() as _,
-            span: proc_macro2::Span::call_site(),
-        }),
-        syn::Fields::Unit => syn::Member::Unnamed(syn::Index {
-            index: 0,
-            span: proc_macro2::Span::call_site(),
-        }),
-    }
-}
+fn alter_struct(ast: DeriveInput, name_snail_case: &str, name_camel_case: &str) -> TokenStream2 {
+    let trait_handle_wrapper = TokenStream2::from_str(&format!(
+        "gateway_addon_rust::{}::{}HandleWrapper",
+        name_snail_case, name_camel_case
+    ))
+    .unwrap();
+    let trait_build = TokenStream2::from_str(&format!(
+        "gateway_addon_rust::{}::Build{}",
+        name_snail_case, name_camel_case
+    ))
+    .unwrap();
+    let struct_built = TokenStream2::from_str(&format!("Built{}", name_camel_case)).unwrap();
+    let struct_handle = TokenStream2::from_str(&format!(
+        "gateway_addon_rust::{}::{}Handle",
+        name_snail_case, name_camel_case
+    ))
+    .unwrap();
+    let fn_handle = TokenStream2::from_str(&format!("{}_handle", name_snail_case)).unwrap();
+    let fn_handle_mut = TokenStream2::from_str(&format!("{}_handle_mut", name_snail_case)).unwrap();
 
-fn add_struct_field(
-    struct_data: &mut syn::DataStruct,
-    field_name: &syn::Member,
-    field_type: proc_macro2::TokenStream,
-) {
-    match &mut struct_data.fields {
-        syn::Fields::Named(fields) => {
-            fields.named.push(
-                syn::Field::parse_named
-                    .parse2(quote! { #field_name: #field_type })
-                    .unwrap(),
-            );
+    let struct_name = ast.ident.clone();
+    let struct_built_name = TokenStream2::from_str(&format!("Built{}", struct_name)).unwrap();
+
+    quote! {
+        #ast
+        impl #trait_build for #struct_name {
+            type #struct_built = #struct_built_name;
+            fn build(data: Self, #fn_handle: #struct_handle) -> Self::#struct_built {
+                #struct_built_name { data, #fn_handle }
+            }
         }
-        syn::Fields::Unnamed(fields) => {
-            fields.unnamed.push(
-                syn::Field::parse_unnamed
-                    .parse2(quote! { #field_type })
-                    .unwrap(),
-            );
+        struct #struct_built_name {
+            data: #struct_name,
+            #fn_handle: #struct_handle,
         }
-        syn::Fields::Unit => {
-            let mut fields = syn::punctuated::Punctuated::new();
-            fields.push(
-                syn::Field::parse_unnamed
-                    .parse2(quote! { #field_type })
-                    .unwrap(),
-            );
-            struct_data.fields = syn::Fields::Unnamed(syn::FieldsUnnamed {
-                paren_token: syn::token::Paren {
-                    span: proc_macro2::Span::call_site(),
-                },
-                unnamed: fields,
-            });
+        impl #trait_handle_wrapper for #struct_built_name {
+            fn #fn_handle(&self) -> &#struct_handle {
+                &self.#fn_handle
+            }
+            fn #fn_handle_mut(&mut self) -> &mut #struct_handle {
+                &mut self.#fn_handle
+            }
+        }
+        impl std::ops::Deref for #struct_built_name {
+            type Target = #struct_name;
+            fn deref(&self) -> &Self::Target {
+                &self.data
+            }
+        }
+        impl std::ops::DerefMut for #struct_built_name {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.data
+            }
         }
     }
 }
