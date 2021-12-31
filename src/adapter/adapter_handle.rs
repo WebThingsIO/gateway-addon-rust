@@ -4,7 +4,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-use crate::{client::Client, error::WebthingsError, Adapter, Device, DeviceBuilder, DeviceHandle};
+use crate::{
+    client::Client,
+    device::{BuildDevice, DeviceStructure},
+    error::WebthingsError,
+    Adapter, Device, DeviceHandle,
+};
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
@@ -38,16 +43,12 @@ impl AdapterHandle {
         }
     }
 
-    /// Build and add a new device using the given [device builder][crate::DeviceBuilder].
-    pub async fn add_device<D, B>(
+    /// Build and add a new device using the given data struct.
+    pub async fn add_device<D: BuildDevice + DeviceStructure>(
         &mut self,
-        device_builder: B,
-    ) -> Result<Arc<Mutex<Box<dyn Device>>>, WebthingsError>
-    where
-        D: Device,
-        B: DeviceBuilder<Device = D>,
-    {
-        let device_description = device_builder.full_description()?;
+        device: D,
+    ) -> Result<Arc<Mutex<Box<dyn Device>>>, WebthingsError> {
+        let device_description = device.full_description()?;
 
         let message: Message = DeviceAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
@@ -65,16 +66,16 @@ impl AdapterHandle {
             self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
-            device_builder.id(),
-            device_builder.description(),
+            device.id(),
+            device.description(),
         );
 
-        let properties = device_builder.properties();
-        let actions = device_builder.actions();
-        let events = device_builder.events();
+        let properties = device.properties();
+        let actions = device.actions();
+        let events = device.events();
 
         let device: Arc<Mutex<Box<dyn Device>>> =
-            Arc::new(Mutex::new(Box::new(device_builder.build(device_handle))));
+            Arc::new(Mutex::new(Box::new(D::build(device, device_handle))));
         let device_weak = Arc::downgrade(&device);
 
         {
@@ -145,7 +146,9 @@ impl AdapterHandle {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        client::Client, device::tests::MockDeviceBuilder, AdapterHandle, Device, DeviceBuilder,
+        client::Client,
+        device::{tests::MockDevice, DeviceStructure},
+        AdapterHandle, Device,
     };
     use rstest::{fixture, rstest};
     use std::sync::Arc;
@@ -156,8 +159,8 @@ pub(crate) mod tests {
         adapter: &mut AdapterHandle,
         device_id: &str,
     ) -> Arc<Mutex<Box<dyn Device>>> {
-        let device_builder = MockDeviceBuilder::new(device_id.to_owned());
-        let expected_description = device_builder.full_description().unwrap();
+        let device = MockDevice::new(device_id.to_owned());
+        let expected_description = device.full_description().unwrap();
 
         let plugin_id = adapter.plugin_id.to_owned();
         let adapter_id = adapter.adapter_id.to_owned();
@@ -178,7 +181,7 @@ pub(crate) mod tests {
             .times(1)
             .returning(|_| Ok(()));
 
-        adapter.add_device(device_builder).await.unwrap()
+        adapter.add_device(device).await.unwrap()
     }
 
     const PLUGIN_ID: &str = "plugin_id";

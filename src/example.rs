@@ -4,17 +4,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
+#![allow(clippy::new_without_default)]
+
 use crate::{
     action::NoInput,
     actions,
     adapter::{AdapterHandleWrapper, BuildAdapter},
-    device::DeviceHandleWrapper,
+    device::{BuildDevice, DeviceHandleWrapper},
     error::WebthingsError,
     event::NoData,
     events,
     plugin::connect,
     properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
-    DeviceBuilder, DeviceDescription, DeviceHandle, Event, EventDescription, Events, Properties,
+    DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, Events, Properties,
     Property, PropertyBuilder, PropertyDescription, PropertyHandle,
 };
 use as_any::Downcast;
@@ -88,17 +90,53 @@ impl ExampleAdapter {
 impl BuiltExampleAdapter {
     async fn init(&mut self) -> Result<(), WebthingsError> {
         self.adapter_handle_mut()
-            .add_device(ExampleDeviceBuilder::new())
+            .add_device(ExampleDevice::new())
             .await?;
         Ok(())
     }
 }
 
-pub struct ExampleDeviceBuilder();
+pub struct ExampleDevice;
 
-impl DeviceBuilder for ExampleDeviceBuilder {
-    type Device = ExampleDevice;
+pub struct BuiltExampleDevice {
+    data: ExampleDevice,
+    device_handle: DeviceHandle,
+}
 
+impl BuildDevice for ExampleDevice {
+    type BuiltDevice = BuiltExampleDevice;
+    fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
+        BuiltExampleDevice {
+            data,
+            device_handle,
+        }
+    }
+}
+
+impl DeviceHandleWrapper for BuiltExampleDevice {
+    fn device_handle(&self) -> &DeviceHandle {
+        &self.device_handle
+    }
+
+    fn device_handle_mut(&mut self) -> &mut DeviceHandle {
+        &mut self.device_handle
+    }
+}
+
+impl std::ops::Deref for BuiltExampleDevice {
+    type Target = ExampleDevice;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for BuiltExampleDevice {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl DeviceStructure for ExampleDevice {
     fn id(&self) -> String {
         "example-device".to_owned()
     }
@@ -118,36 +156,13 @@ impl DeviceBuilder for ExampleDeviceBuilder {
     fn events(&self) -> Events {
         events![ExampleEvent::new()]
     }
-
-    fn build(self, device_handle: DeviceHandle) -> Self::Device {
-        ExampleDevice::new(device_handle)
-    }
 }
 
-impl ExampleDeviceBuilder {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self()
-    }
-}
-
-pub struct ExampleDevice(DeviceHandle);
-
-impl DeviceHandleWrapper for ExampleDevice {
-    fn device_handle(&self) -> &DeviceHandle {
-        &self.0
-    }
-
-    fn device_handle_mut(&mut self) -> &mut DeviceHandle {
-        &mut self.0
-    }
-}
-
-impl Device for ExampleDevice {}
+impl Device for BuiltExampleDevice {}
 
 impl ExampleDevice {
-    pub fn new(device_handle: DeviceHandle) -> Self {
-        Self(device_handle)
+    pub fn new() -> Self {
+        Self
     }
 }
 

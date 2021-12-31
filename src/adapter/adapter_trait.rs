@@ -18,7 +18,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDeviceBuilder, error::WebthingsError, adapter::AdapterHandleWrapper};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDevice, error::WebthingsError, adapter::AdapterHandleWrapper};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
@@ -41,7 +41,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 /// impl BuiltExampleAdapter {
 ///     pub async fn init(&mut self) -> Result<(), WebthingsError> {
 ///         self.adapter_handle_mut()
-///             .add_device(ExampleDeviceBuilder::new())
+///             .add_device(ExampleDevice::new())
 ///             .await?;
 ///         Ok(())
 ///     }
@@ -107,7 +107,7 @@ pub trait Adapter: AdapterHandleWrapper + Send + Sync + AsAny + 'static {
 impl Downcast for dyn Adapter {}
 
 /// A trait used to wrap an [adapter handle][AdapterHandle].
-/// 
+///
 /// When you use the [adapter][macro@crate::adapter] macro, this will be implemented automatically.
 ///
 /// # Examples
@@ -178,7 +178,7 @@ pub trait AdapterHandleWrapper {
 pub trait BuildAdapter {
     /// Type of [Adapter] to build.
     type BuiltAdapter: Adapter;
-    
+
     /// Build the [adapter][Adapter] from a data struct and an [adapter handle][AdapterHandle].
     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter;
 }

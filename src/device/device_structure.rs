@@ -5,8 +5,8 @@
  */
 
 use crate::{
-    actions, error::WebthingsError, events, properties, Actions, Device, DeviceDescription,
-    DeviceHandle, Events, Properties,
+    actions, error::WebthingsError, events, properties, Actions, DeviceDescription, Events,
+    Properties,
 };
 
 use std::collections::BTreeMap;
@@ -15,20 +15,15 @@ use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 /// A trait used to specify the structure of a WoT device.
 ///
-/// Builds a [Device] instance. Created through an [adapter][crate::Adapter].
-///
 /// # Examples
 /// ```
 /// # #[macro_use]
 /// # extern crate gateway_addon_rust;
-/// # use gateway_addon_rust::{prelude::*, example::{ExampleDevice, ExamplePropertyBuilder, ExampleEvent, ExampleAction}};
+/// # use gateway_addon_rust::{prelude::*, example::{ExamplePropertyBuilder, ExampleEvent, ExampleAction}};
 /// # fn main() {}
-/// // ...
-/// pub struct ExampleDeviceBuilder();
+/// pub struct ExampleDevice { foo: i32 }
 ///
-/// impl DeviceBuilder for ExampleDeviceBuilder {
-///     type Device = ExampleDevice;
-///
+/// impl DeviceStructure for ExampleDevice {
 ///     fn id(&self) -> String {
 ///         "example-device".to_owned()
 ///     }
@@ -48,16 +43,9 @@ use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 ///     fn events(&self) -> Events {
 ///         events![ExampleEvent::new()]
 ///     }
-///
-///     fn build(self, device_handle: DeviceHandle) -> Self::Device {
-///         ExampleDevice::new(device_handle)
-///     }
 /// }
 /// ```
-pub trait DeviceBuilder: Send + Sync + 'static {
-    /// Type of [device][Device] this builds.
-    type Device: Device;
-
+pub trait DeviceStructure: Send + Sync + 'static {
     /// ID of the device.
     fn id(&self) -> String;
 
@@ -87,9 +75,6 @@ pub trait DeviceBuilder: Send + Sync + 'static {
     fn events(&self) -> Events {
         events![]
     }
-
-    /// Build a new instance of this device using the given [device handle][DeviceHandle].
-    fn build(self, device_handle: DeviceHandle) -> Self::Device;
 
     #[doc(hidden)]
     fn full_description(&self) -> Result<FullDeviceDescription, WebthingsError> {
@@ -125,26 +110,38 @@ pub(crate) mod tests {
     use crate::{
         action::{tests::MockAction, NoInput},
         actions,
-        device::tests::MockDevice,
         event::{tests::MockEvent, NoData},
         events, properties,
         property::tests::MockPropertyBuilder,
-        Actions, DeviceBuilder, DeviceDescription, DeviceHandle, Events, Properties,
+        Actions, DeviceDescription, DeviceStructure, Events, Properties,
     };
 
-    pub struct MockDeviceBuilder {
+    pub struct MockDevice {
         device_id: String,
     }
 
-    impl MockDeviceBuilder {
+    impl MockDevice {
         pub fn new(device_id: String) -> Self {
             Self { device_id }
         }
+
+        pub const PROPERTY_BOOL: &'static str = "property_bool";
+        pub const PROPERTY_U8: &'static str = "property_u8";
+        pub const PROPERTY_I32: &'static str = "property_i32";
+        pub const PROPERTY_F32: &'static str = "property_f32";
+        pub const PROPERTY_OPTI32: &'static str = "property_opti32";
+        pub const PROPERTY_STRING: &'static str = "property_string";
+        pub const ACTION_NOINPUT: &'static str = "action_noinput";
+        pub const ACTION_BOOL: &'static str = "action_bool";
+        pub const ACTION_U8: &'static str = "action_u8";
+        pub const ACTION_I32: &'static str = "action_i32";
+        pub const ACTION_F32: &'static str = "action_f32";
+        pub const ACTION_OPTI32: &'static str = "action_opti32";
+        pub const ACTION_STRING: &'static str = "action_string";
+        pub const EVENT_NODATA: &'static str = "event_nodata";
     }
 
-    impl DeviceBuilder for MockDeviceBuilder {
-        type Device = MockDevice;
-
+    impl DeviceStructure for MockDevice {
         fn id(&self) -> String {
             self.device_id.clone()
         }
@@ -180,10 +177,6 @@ pub(crate) mod tests {
             events![MockEvent::<NoData>::new(
                 MockDevice::EVENT_NODATA.to_owned()
             )]
-        }
-
-        fn build(self, device_handle: DeviceHandle) -> Self::Device {
-            MockDevice::new(device_handle)
         }
     }
 }

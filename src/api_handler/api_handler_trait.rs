@@ -15,7 +15,7 @@ use async_trait::async_trait;
 /// # Examples
 /// ```no_run
 /// # use gateway_addon_rust::{
-/// #     prelude::*, plugin::connect, example::ExampleDeviceBuilder,
+/// #     prelude::*, plugin::connect,
 /// #     api_handler::{ApiHandler, ApiRequest, ApiResponse}, error::WebthingsError
 /// # };
 /// # use async_trait::async_trait;

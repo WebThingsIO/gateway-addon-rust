@@ -12,7 +12,7 @@ use webthings_gateway_ipc_types::{
 
 /// A struct which represents a WoT [device description][webthings_gateway_ipc_types::Device].
 ///
-/// This is used by [DeviceBuilder][crate::DeviceBuilder].
+/// This is used by [DeviceStructure][crate::DeviceStructure].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///
