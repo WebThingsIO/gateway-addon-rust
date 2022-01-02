@@ -18,6 +18,7 @@ pub mod device;
 pub mod error;
 pub mod event;
 #[cfg(not(test))]
+#[cfg(debug_assertions)]
 #[doc(hidden)]
 pub mod example;
 pub(crate) mod message_handler;
