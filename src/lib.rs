@@ -37,8 +37,8 @@ pub mod prelude {
     pub use crate::{
         action::{self, Action, ActionDescription, ActionHandle, Actions},
         actions,
-        adapter::{Adapter, AdapterHandle},
-        device::{Device, DeviceDescription, DeviceHandle, DeviceStructure},
+        adapter::{adapter, Adapter, AdapterHandle},
+        device::{device, Device, DeviceDescription, DeviceHandle, DeviceStructure},
         event::{self, Event, EventDescription, EventHandle, Events},
         events,
         plugin::Plugin,
@@ -47,8 +47,6 @@ pub mod prelude {
             self, Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle,
         },
     };
-    pub use gateway_addon_rust_codegen::*;
 }
 
-pub use gateway_addon_rust_codegen::*;
 pub use prelude::*;

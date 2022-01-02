@@ -7,10 +7,12 @@
 //! A module for everything related to WebthingsIO adapters.
 
 mod adapter_handle;
+mod adapter_macros;
 pub(crate) mod adapter_message_handler;
 mod adapter_trait;
 
 pub use adapter_handle::*;
+pub use adapter_macros::*;
 pub use adapter_trait::*;
 
 #[cfg(test)]
