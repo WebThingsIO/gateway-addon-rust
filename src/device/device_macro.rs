@@ -20,7 +20,9 @@
 /// }
 ///
 /// #[async_trait]
-/// impl Device for BuiltExampleDevice {}
+/// impl Device for BuiltExampleDevice {
+///     // ...
+/// }
 /// ```
 /// will expand to
 /// ```
@@ -79,6 +81,8 @@
 /// }
 ///
 /// #[async_trait]
-/// impl Device for BuiltExampleDevice {}
+/// impl Device for BuiltExampleDevice {
+///     // ...
+/// }
 /// ```
 pub use gateway_addon_rust_codegen::device;

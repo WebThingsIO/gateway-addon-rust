@@ -8,9 +8,7 @@ use crate::{
     actions, error::WebthingsError, events, properties, Actions, DeviceDescription, Events,
     Properties,
 };
-
 use std::collections::BTreeMap;
-
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 
 /// A trait used to specify the structure of a WoT device.
@@ -18,9 +16,7 @@ use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 /// # Examples
 /// ```
 /// # #[macro_use]
-/// # extern crate gateway_addon_rust;
-/// # use gateway_addon_rust::{prelude::*, example::{ExamplePropertyBuilder, ExampleEvent, ExampleAction}};
-/// # fn main() {}
+/// # use gateway_addon_rust::{prelude::*, example::{ExampleProperty, ExampleEvent, ExampleAction}};
 /// pub struct ExampleDevice { foo: i32 }
 ///
 /// impl DeviceStructure for ExampleDevice {
@@ -33,7 +29,7 @@ use webthings_gateway_ipc_types::Device as FullDeviceDescription;
 ///     }
 ///
 ///     fn properties(&self) -> Properties {
-///         properties![ExamplePropertyBuilder::new()]
+///         properties![ExampleProperty::new()]
 ///     }
 ///
 ///     fn actions(&self) -> Actions {
@@ -112,7 +108,7 @@ pub(crate) mod tests {
         actions,
         event::{tests::MockEvent, NoData},
         events, properties,
-        property::tests::MockPropertyBuilder,
+        property::tests::MockProperty,
         Actions, DeviceDescription, DeviceStructure, Events, Properties,
     };
 
@@ -152,12 +148,12 @@ pub(crate) mod tests {
 
         fn properties(&self) -> Properties {
             properties![
-                MockPropertyBuilder::<bool>::new(MockDevice::PROPERTY_BOOL.to_owned()),
-                MockPropertyBuilder::<u8>::new(MockDevice::PROPERTY_U8.to_owned()),
-                MockPropertyBuilder::<i32>::new(MockDevice::PROPERTY_I32.to_owned()),
-                MockPropertyBuilder::<f32>::new(MockDevice::PROPERTY_F32.to_owned()),
-                MockPropertyBuilder::<Option<i32>>::new(MockDevice::PROPERTY_OPTI32.to_owned()),
-                MockPropertyBuilder::<String>::new(MockDevice::PROPERTY_STRING.to_owned())
+                MockProperty::<bool>::new(MockDevice::PROPERTY_BOOL.to_owned()),
+                MockProperty::<u8>::new(MockDevice::PROPERTY_U8.to_owned()),
+                MockProperty::<i32>::new(MockDevice::PROPERTY_I32.to_owned()),
+                MockProperty::<f32>::new(MockDevice::PROPERTY_F32.to_owned()),
+                MockProperty::<Option<i32>>::new(MockDevice::PROPERTY_OPTI32.to_owned()),
+                MockProperty::<String>::new(MockDevice::PROPERTY_STRING.to_owned())
             ]
         }
 

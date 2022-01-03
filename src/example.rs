@@ -15,9 +15,11 @@ use crate::{
     event::NoData,
     events,
     plugin::connect,
-    properties, Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
+    properties,
+    property::{BuildProperty, PropertyHandleWrapper},
+    Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
     DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, Events, Properties,
-    Property, PropertyBuilder, PropertyDescription, PropertyHandle,
+    Property, PropertyDescription, PropertyHandle, PropertyStructure,
 };
 use as_any::Downcast;
 use async_trait::async_trait;
@@ -146,7 +148,7 @@ impl DeviceStructure for ExampleDevice {
     }
 
     fn properties(&self) -> Properties {
-        properties![ExamplePropertyBuilder::new()]
+        properties![ExampleProperty::new()]
     }
 
     fn actions(&self) -> Actions {
@@ -166,45 +168,68 @@ impl ExampleDevice {
     }
 }
 
-pub struct ExamplePropertyBuilder();
+pub struct ExampleProperty;
 
-impl PropertyBuilder for ExamplePropertyBuilder {
-    type Property = ExampleProperty;
+pub struct BuiltExampleProperty {
+    data: ExampleProperty,
+    property_handle: PropertyHandle<<ExampleProperty as PropertyStructure>::Value>,
+}
+
+impl BuildProperty for ExampleProperty {
+    type BuiltProperty = BuiltExampleProperty;
+    fn build(
+        data: Self,
+        property_handle: PropertyHandle<<Self as PropertyStructure>::Value>,
+    ) -> Self::BuiltProperty {
+        BuiltExampleProperty {
+            data,
+            property_handle,
+        }
+    }
+}
+
+impl PropertyHandleWrapper for BuiltExampleProperty {
+    type Value = <ExampleProperty as PropertyStructure>::Value;
+
+    fn property_handle(&self) -> &PropertyHandle<Self::Value> {
+        &self.property_handle
+    }
+
+    fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value> {
+        &mut self.property_handle
+    }
+}
+
+impl std::ops::Deref for BuiltExampleProperty {
+    type Target = ExampleProperty;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for BuiltExampleProperty {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl PropertyStructure for ExampleProperty {
     type Value = i32;
 
     fn name(&self) -> String {
-        "example-property".to_owned()
+        "example-Property".to_owned()
     }
 
-    fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
-        ExampleProperty::new(property_handle)
-    }
-
-    fn description(&self) -> PropertyDescription<i32> {
+    fn description(&self) -> PropertyDescription<Self::Value> {
         PropertyDescription::default()
     }
 }
 
-impl ExamplePropertyBuilder {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self()
-    }
-}
-
-pub struct ExampleProperty(PropertyHandle<i32>);
-
-impl Property for ExampleProperty {
-    type Value = i32;
-
-    fn property_handle_mut(&mut self) -> &mut PropertyHandle<Self::Value> {
-        &mut self.0
-    }
-}
+impl Property for BuiltExampleProperty {}
 
 impl ExampleProperty {
-    pub fn new(property_handle: PropertyHandle<i32>) -> Self {
-        Self(property_handle)
+    pub fn new() -> Self {
+        Self
     }
 }
 

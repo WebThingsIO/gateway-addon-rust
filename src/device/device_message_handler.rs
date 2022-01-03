@@ -125,7 +125,7 @@ pub(crate) mod tests {
         event::NoData,
         message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
-        property::{self, tests::MockProperty},
+        property::{self, tests::BuiltMockProperty},
         EventHandle, Plugin, PropertyHandle,
     };
     use as_any::Downcast;
@@ -290,7 +290,7 @@ pub(crate) mod tests {
                 .get_property(property_name)
                 .unwrap();
             let mut property = property.lock().await;
-            let property = property.downcast_mut::<MockProperty<T>>().unwrap();
+            let property = property.downcast_mut::<BuiltMockProperty<T>>().unwrap();
             property
                 .property_helper
                 .expect_on_update()

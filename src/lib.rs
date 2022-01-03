@@ -44,7 +44,8 @@ pub mod prelude {
         plugin::Plugin,
         properties,
         property::{
-            self, Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle,
+            self, property, Properties, Property, PropertyDescription, PropertyHandle,
+            PropertyStructure,
         },
     };
 }

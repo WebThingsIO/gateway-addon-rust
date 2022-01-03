@@ -6,23 +6,41 @@ use syn::DeriveInput;
 
 #[proc_macro_attribute]
 pub fn adapter(_args: TokenStream, input: TokenStream) -> TokenStream {
-    apply_macro(input, "adapter", "Adapter")
+    apply_macro(input, "adapter", "Adapter", None)
 }
 
 #[proc_macro_attribute]
 pub fn device(_args: TokenStream, input: TokenStream) -> TokenStream {
-    apply_macro(input, "device", "Device")
+    apply_macro(input, "device", "Device", None)
 }
 
-fn apply_macro(input: TokenStream, name_snail_case: &str, name_camel_case: &str) -> TokenStream {
+#[proc_macro_attribute]
+pub fn property(_args: TokenStream, input: TokenStream) -> TokenStream {
+    apply_macro(input, "property", "Property", Some("Value"))
+}
+
+fn apply_macro(
+    input: TokenStream,
+    name_snail_case: &str,
+    name_camel_case: &str,
+    generic_name: Option<&str>,
+) -> TokenStream {
     if let Ok(ast) = syn::parse2::<DeriveInput>(input.into()) {
-        alter_struct(ast, name_snail_case, name_camel_case).into()
+        alter_struct(ast, name_snail_case, name_camel_case, generic_name).into()
     } else {
         panic!("`{}` has to be used with structs", name_snail_case)
     }
 }
 
-fn alter_struct(ast: DeriveInput, name_snail_case: &str, name_camel_case: &str) -> TokenStream2 {
+fn alter_struct(
+    ast: DeriveInput,
+    name_snail_case: &str,
+    name_camel_case: &str,
+    generic_name: Option<&str>,
+) -> TokenStream2 {
+    let struct_name = ast.ident.clone();
+    let struct_built_name = TokenStream2::from_str(&format!("Built{}", struct_name)).unwrap();
+
     let trait_handle_wrapper = TokenStream2::from_str(&format!(
         "gateway_addon_rust::{}::{}HandleWrapper",
         name_snail_case, name_camel_case
@@ -34,16 +52,35 @@ fn alter_struct(ast: DeriveInput, name_snail_case: &str, name_camel_case: &str) 
     ))
     .unwrap();
     let struct_built = TokenStream2::from_str(&format!("Built{}", name_camel_case)).unwrap();
-    let struct_handle = TokenStream2::from_str(&format!(
-        "gateway_addon_rust::{}::{}Handle",
-        name_snail_case, name_camel_case
-    ))
+    let struct_handle = TokenStream2::from_str(&if let Some(generic_name) = generic_name {
+        format!(
+            "gateway_addon_rust::{name_snail_case}::{name_camel_case}Handle<<{struct_name} as gateway_addon_rust::{name_snail_case}::{name_camel_case}Structure>::{generic_name}>",
+            name_snail_case = name_snail_case,
+            name_camel_case = name_camel_case,
+            struct_name = struct_name,
+            generic_name = generic_name,
+        )
+    } else {
+        format!(
+            "gateway_addon_rust::{}::{}Handle",
+            name_snail_case, name_camel_case
+        )
+    })
     .unwrap();
     let fn_handle = TokenStream2::from_str(&format!("{}_handle", name_snail_case)).unwrap();
     let fn_handle_mut = TokenStream2::from_str(&format!("{}_handle_mut", name_snail_case)).unwrap();
-
-    let struct_name = ast.ident.clone();
-    let struct_built_name = TokenStream2::from_str(&format!("Built{}", struct_name)).unwrap();
+    let typedef = TokenStream2::from_str(&if let Some(generic_name) = generic_name {
+        format!(
+            "type {generic_name} = <{struct_name} as gateway_addon_rust::{name_snail_case}::{name_camel_case}Structure>::{generic_name};",
+            name_snail_case = name_snail_case,
+            name_camel_case = name_camel_case,
+            struct_name = struct_name,
+            generic_name = generic_name,
+        )
+    } else {
+        "".to_owned()
+    })
+    .unwrap();
 
     quote! {
         #ast
@@ -58,6 +95,7 @@ fn alter_struct(ast: DeriveInput, name_snail_case: &str, name_camel_case: &str) 
             #fn_handle: #struct_handle,
         }
         impl #trait_handle_wrapper for #struct_built_name {
+            #typedef
             fn #fn_handle(&self) -> &#struct_handle {
                 &self.#fn_handle
             }

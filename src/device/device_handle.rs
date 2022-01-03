@@ -238,7 +238,7 @@ pub(crate) mod tests {
         action::{tests::MockAction, NoInput},
         client::Client,
         event::{tests::MockEvent, NoData},
-        property::tests::MockPropertyBuilder,
+        property::tests::MockProperty,
         DeviceDescription, DeviceHandle,
     };
     use rstest::{fixture, rstest};
@@ -270,9 +270,7 @@ pub(crate) mod tests {
 
     #[rstest]
     fn test_get_property(mut device: DeviceHandle) {
-        device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
-            PROPERTY_NAME.to_owned(),
-        )));
+        device.add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())));
         assert!(device.get_property(PROPERTY_NAME).is_some())
     }
 
@@ -307,9 +305,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_set_property_value(mut device: DeviceHandle) {
         let value = 42;
-        device.add_property(Box::new(MockPropertyBuilder::<i32>::new(
-            PROPERTY_NAME.to_owned(),
-        )));
+        device.add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())));
 
         device
             .client
