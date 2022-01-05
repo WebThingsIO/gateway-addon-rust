@@ -2,7 +2,7 @@
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, property::BuildProperty};
+/// # use gateway_addon_rust::{prelude::*, property::PropertyBuilder};
 /// # use async_trait::async_trait;
 /// #[property]
 /// struct ExampleProperty {
@@ -27,7 +27,7 @@
 /// ```
 /// will expand to
 /// ```
-/// # use gateway_addon_rust::{prelude::*, property::{PropertyHandleWrapper, BuildProperty, PropertyStructure}};
+/// # use gateway_addon_rust::{prelude::*, property::{BuiltProperty, PropertyBuilder, PropertyStructure}};
 /// # use std::ops::{Deref, DerefMut};
 /// # use async_trait::async_trait;
 /// struct ExampleProperty {
@@ -39,7 +39,7 @@
 ///     property_handle: PropertyHandle<<ExampleProperty as PropertyStructure>::Value>,
 /// }
 ///
-/// impl PropertyHandleWrapper for BuiltExampleProperty {
+/// impl BuiltProperty for BuiltExampleProperty {
 ///     type Value = <ExampleProperty as PropertyStructure>::Value;
 ///     fn property_handle(&self) -> &PropertyHandle<Self::Value> {
 ///         &self.property_handle
@@ -49,7 +49,7 @@
 ///     }
 /// }
 ///
-/// impl BuildProperty for ExampleProperty {
+/// impl PropertyBuilder for ExampleProperty {
 ///     type BuiltProperty = BuiltExampleProperty;
 ///     fn build(data: Self, property_handle: PropertyHandle<<ExampleProperty as PropertyStructure>::Value>) -> Self::BuiltProperty {
 ///         BuiltExampleProperty {

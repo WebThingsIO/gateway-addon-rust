@@ -292,7 +292,6 @@ pub(crate) mod tests {
             let mut property = property.lock().await;
             let property = property.downcast_mut::<BuiltMockProperty<T>>().unwrap();
             property
-                .property_helper
                 .expect_on_update()
                 .withf(move |value| value == &expected_value)
                 .times(1)

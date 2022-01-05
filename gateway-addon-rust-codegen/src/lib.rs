@@ -42,12 +42,12 @@ fn alter_struct(
     let struct_built_name = TokenStream2::from_str(&format!("Built{}", struct_name)).unwrap();
 
     let trait_handle_wrapper = TokenStream2::from_str(&format!(
-        "gateway_addon_rust::{}::{}HandleWrapper",
+        "gateway_addon_rust::{}::Built{}",
         name_snail_case, name_camel_case
     ))
     .unwrap();
     let trait_build = TokenStream2::from_str(&format!(
-        "gateway_addon_rust::{}::Build{}",
+        "gateway_addon_rust::{}::{}Builder",
         name_snail_case, name_camel_case
     ))
     .unwrap();

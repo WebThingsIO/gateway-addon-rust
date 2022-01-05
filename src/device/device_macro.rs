@@ -2,7 +2,7 @@
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, device::BuildDevice};
+/// # use gateway_addon_rust::{prelude::*, device::DeviceBuilder};
 /// # use async_trait::async_trait;
 /// #[device]
 /// struct ExampleDevice {
@@ -26,7 +26,7 @@
 /// ```
 /// will expand to
 /// ```
-/// # use gateway_addon_rust::{prelude::*, device::{DeviceHandleWrapper, BuildDevice}};
+/// # use gateway_addon_rust::{prelude::*, device::{BuiltDevice, DeviceBuilder}};
 /// # use std::ops::{Deref, DerefMut};
 /// # use async_trait::async_trait;
 /// struct ExampleDevice {
@@ -38,7 +38,7 @@
 ///     device_handle: DeviceHandle,
 /// }
 ///
-/// impl DeviceHandleWrapper for BuiltExampleDevice {
+/// impl BuiltDevice for BuiltExampleDevice {
 ///     fn device_handle(&self) -> &DeviceHandle {
 ///         &self.device_handle
 ///     }
@@ -47,7 +47,7 @@
 ///     }
 /// }
 ///
-/// impl BuildDevice for ExampleDevice {
+/// impl DeviceBuilder for ExampleDevice {
 ///     type BuiltDevice = BuiltExampleDevice;
 ///     fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
 ///         BuiltExampleDevice {

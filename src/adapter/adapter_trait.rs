@@ -18,7 +18,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 ///
 /// # Examples
 /// ```no_run
-/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDevice, error::WebthingsError, adapter::AdapterHandleWrapper};
+/// # use gateway_addon_rust::{prelude::*, plugin::connect, example::ExampleDevice, error::WebthingsError, adapter::BuiltAdapter};
 /// # use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use async_trait::async_trait;
 /// # use as_any::Downcast;
@@ -65,7 +65,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 /// }
 /// ```
 #[async_trait]
-pub trait Adapter: AdapterHandleWrapper + Send + Sync + AsAny + 'static {
+pub trait Adapter: BuiltAdapter + Send + Sync + AsAny + 'static {
     /// Called when this Adapter should be unloaded.
     async fn on_unload(&mut self) -> Result<(), String> {
         Ok(())
@@ -112,13 +112,13 @@ impl Downcast for dyn Adapter {}
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, adapter::AdapterHandleWrapper};
+/// # use gateway_addon_rust::{prelude::*, adapter::BuiltAdapter};
 /// # use async_trait::async_trait;
 /// struct BuiltExampleAdapter {
 ///     adapter_handle: AdapterHandle,
 /// }
 ///
-/// impl AdapterHandleWrapper for BuiltExampleAdapter {
+/// impl BuiltAdapter for BuiltExampleAdapter {
 ///     fn adapter_handle(&self) -> &AdapterHandle {
 ///         &self.adapter_handle
 ///     }
@@ -127,7 +127,7 @@ impl Downcast for dyn Adapter {}
 ///     }
 /// }
 /// ```
-pub trait AdapterHandleWrapper {
+pub trait BuiltAdapter {
     /// Return a reference to the wrapped [adapter handle][AdapterHandle].
     fn adapter_handle(&self) -> &AdapterHandle;
 
@@ -141,7 +141,7 @@ pub trait AdapterHandleWrapper {
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, adapter::{AdapterHandleWrapper, BuildAdapter}};
+/// # use gateway_addon_rust::{prelude::*, adapter::{BuiltAdapter, AdapterBuilder}};
 /// # use async_trait::async_trait;
 /// struct ExampleAdapter {
 ///     foo: i32,
@@ -152,7 +152,7 @@ pub trait AdapterHandleWrapper {
 ///     adapter_handle: AdapterHandle,
 /// }
 ///
-/// impl AdapterHandleWrapper for BuiltExampleAdapter {
+/// impl BuiltAdapter for BuiltExampleAdapter {
 ///     // ...
 /// #   fn adapter_handle(&self) -> &AdapterHandle {
 /// #       &self.adapter_handle
@@ -162,7 +162,10 @@ pub trait AdapterHandleWrapper {
 /// #   }
 /// }
 ///
-/// impl BuildAdapter for ExampleAdapter {
+/// #[async_trait]
+/// impl Adapter for BuiltExampleAdapter {}
+///
+/// impl AdapterBuilder for ExampleAdapter {
 ///     type BuiltAdapter = BuiltExampleAdapter;
 ///     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
 ///         BuiltExampleAdapter {
@@ -171,11 +174,8 @@ pub trait AdapterHandleWrapper {
 ///         }
 ///     }
 /// }
-///
-/// #[async_trait]
-/// impl Adapter for BuiltExampleAdapter {}
 /// ```
-pub trait BuildAdapter {
+pub trait AdapterBuilder {
     /// Type of [Adapter] to build.
     type BuiltAdapter: Adapter;
 
@@ -186,7 +186,7 @@ pub trait BuildAdapter {
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        adapter::{AdapterHandleWrapper, BuildAdapter},
+        adapter::{AdapterBuilder, BuiltAdapter},
         Adapter, AdapterHandle,
     };
     use async_trait::async_trait;
@@ -213,7 +213,7 @@ pub(crate) mod tests {
         adapter_handle: AdapterHandle,
     }
 
-    impl BuildAdapter for MockAdapter {
+    impl AdapterBuilder for MockAdapter {
         type BuiltAdapter = BuiltMockAdapter;
         fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
             BuiltMockAdapter {
@@ -223,7 +223,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl AdapterHandleWrapper for BuiltMockAdapter {
+    impl BuiltAdapter for BuiltMockAdapter {
         fn adapter_handle(&self) -> &AdapterHandle {
             &self.adapter_handle
         }

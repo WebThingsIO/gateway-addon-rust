@@ -10,7 +10,7 @@ use webthings_gateway_ipc_types::{Link, Property as FullPropertyDescription};
 
 /// A struct which represents a WoT [property description][webthings_gateway_ipc_types::Property].
 ///
-/// This is used by [PropertyBuilder][crate::PropertyBuilder].
+/// This is used by [PropertyBuilder][crate::property::PropertyBuilder].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///
@@ -107,24 +107,28 @@ impl<T: Value> PropertyDescription<T> {
     }
 
     /// Set `@type`.
+    #[must_use]
     pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type);
         self
     }
 
     /// Set `description`.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Set `enum`.
+    #[must_use]
     pub fn enum_(mut self, enum_: Vec<T>) -> Self {
         self.enum_ = Some(enum_);
         self
     }
 
     /// Set `links`.
+    #[must_use]
     pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
@@ -150,6 +154,7 @@ impl<T: Value> PropertyDescription<T> {
     ///     })
     /// # ;
     /// ```
+    #[must_use]
     pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
@@ -159,30 +164,35 @@ impl<T: Value> PropertyDescription<T> {
     }
 
     /// Set `maximum`.
+    #[must_use]
     pub fn maximum<F: Into<f64>>(mut self, maximum: F) -> Self {
         self.maximum = Some(maximum.into());
         self
     }
 
     /// Set `minimum`.
+    #[must_use]
     pub fn minimum<F: Into<f64>>(mut self, minimum: F) -> Self {
         self.minimum = Some(minimum.into());
         self
     }
 
     /// Set `multipleOf`.
+    #[must_use]
     pub fn multiple_of<F: Into<f64>>(mut self, multiple_of: F) -> Self {
         self.multiple_of = Some(multiple_of.into());
         self
     }
 
     /// Set `readOnly`.
+    #[must_use]
     pub fn read_only(mut self, read_only: bool) -> Self {
         self.read_only = Some(read_only);
         self
     }
 
     /// Set `title`.
+    #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
@@ -196,24 +206,28 @@ impl<T: Value> PropertyDescription<T> {
     /// PropertyDescription::<serde_json::Value>::default().type_(Type::Number)
     /// # ;
     /// ```
+    #[must_use]
     pub fn type_(mut self, type_: Type) -> Self {
         self.type_ = type_;
         self
     }
 
     /// Set `unit`.
+    #[must_use]
     pub fn unit(mut self, unit: impl Into<String>) -> Self {
         self.unit = Some(unit.into());
         self
     }
 
     /// Set initial `value`.
+    #[must_use]
     pub fn value(mut self, value: T) -> Self {
         self.value = value;
         self
     }
 
     /// Set `visible`.
+    #[must_use]
     pub fn visible(mut self, visible: bool) -> Self {
         self.visible = Some(visible);
         self

@@ -5,7 +5,7 @@
  */
 
 use crate::{
-    adapter::BuildAdapter,
+    adapter::AdapterBuilder,
     api_handler::ApiHandler,
     client::Client,
     database::Database,
@@ -95,7 +95,7 @@ impl Plugin {
     /// #   Ok(())
     /// # }
     /// ```
-    pub async fn create_adapter<T: BuildAdapter>(
+    pub async fn create_adapter<T: AdapterBuilder>(
         &mut self,
         adapter_id: impl Into<String>,
         name: impl Into<String>,

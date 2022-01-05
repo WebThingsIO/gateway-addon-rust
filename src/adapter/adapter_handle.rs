@@ -5,10 +5,7 @@
  */
 
 use crate::{
-    client::Client,
-    device::{BuildDevice, DeviceStructure},
-    error::WebthingsError,
-    Adapter, Device, DeviceHandle,
+    client::Client, device::DeviceBuilder, error::WebthingsError, Adapter, Device, DeviceHandle,
 };
 use std::{
     collections::HashMap,
@@ -44,7 +41,7 @@ impl AdapterHandle {
     }
 
     /// Build and add a new device using the given data struct.
-    pub async fn add_device<D: BuildDevice + DeviceStructure>(
+    pub async fn add_device<D: DeviceBuilder>(
         &mut self,
         device: D,
     ) -> Result<Arc<Mutex<Box<dyn Device>>>, WebthingsError> {

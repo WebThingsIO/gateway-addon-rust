@@ -19,7 +19,7 @@
 /// ```
 /// will expand to
 /// ```
-/// # use gateway_addon_rust::{prelude::*, adapter::{AdapterHandleWrapper, BuildAdapter}};
+/// # use gateway_addon_rust::{prelude::*, adapter::{BuiltAdapter, AdapterBuilder}};
 /// # use std::ops::{Deref, DerefMut};
 /// # use async_trait::async_trait;
 /// struct ExampleAdapter {
@@ -31,7 +31,7 @@
 ///     adapter_handle: AdapterHandle,
 /// }
 ///
-/// impl AdapterHandleWrapper for BuiltExampleAdapter {
+/// impl BuiltAdapter for BuiltExampleAdapter {
 ///     fn adapter_handle(&self) -> &AdapterHandle {
 ///         &self.adapter_handle
 ///     }
@@ -40,7 +40,7 @@
 ///     }
 /// }
 ///
-/// impl BuildAdapter for ExampleAdapter {
+/// impl AdapterBuilder for ExampleAdapter {
 ///     type BuiltAdapter = BuiltExampleAdapter;
 ///     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
 ///         BuiltExampleAdapter {

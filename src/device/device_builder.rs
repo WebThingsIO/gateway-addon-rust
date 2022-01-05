@@ -5,8 +5,8 @@
  */
 
 use crate::{
-    actions, error::WebthingsError, events, properties, Actions, DeviceDescription, Events,
-    Properties,
+    actions, error::WebthingsError, events, properties, Actions, Device, DeviceDescription,
+    DeviceHandle, Events, Properties,
 };
 use std::collections::BTreeMap;
 use webthings_gateway_ipc_types::Device as FullDeviceDescription;
@@ -48,10 +48,10 @@ pub trait DeviceStructure: Send + Sync + 'static {
     /// [WoT description][DeviceDescription] of the device.
     fn description(&self) -> DeviceDescription;
 
-    /// A list of [properties][crate::PropertyBuilder] this device should own.
+    /// A list of [properties][crate::property::PropertyBuilder] this device should own.
     ///
     /// Note that the desired list consists of boxed objects implementing [PropertyBuilderBase][crate::property::PropertyBuilderBase].
-    /// You can use the convenienve macro [properties!][crate::properties] to create this list [PropertyBuilder][crate::PropertyBuilder]s.
+    /// You can use the convenienve macro [properties!][crate::properties] to create this list [PropertyBuilder][crate::property::PropertyBuilder]s.
     fn properties(&self) -> Properties {
         properties![]
     }
@@ -101,15 +101,74 @@ pub trait DeviceStructure: Send + Sync + 'static {
     }
 }
 
+/// A trait used to build a [Device] around a data struct and a [device handle][DeviceHandle].
+///
+/// When you use the [device][macro@crate::device] macro, this will be implemented automatically.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, device::{BuiltDevice, DeviceBuilder}};
+/// # use async_trait::async_trait;
+/// struct ExampleDevice {
+///     foo: i32,
+/// }
+///
+/// struct BuiltExampleDevice {
+///     data: ExampleDevice,
+///     device_handle: DeviceHandle,
+/// }
+///
+/// impl BuiltDevice for BuiltExampleDevice {
+///     // ...
+///   # fn device_handle(&self) -> &DeviceHandle {
+///   #     &self.device_handle
+///   # }
+///   # fn device_handle_mut(&mut self) -> &mut DeviceHandle {
+///   #     &mut self.device_handle
+///   # }
+/// }
+///
+/// #[async_trait]
+/// impl Device for BuiltExampleDevice {}
+///
+/// impl DeviceStructure for ExampleDevice {
+///     /// ...
+/// #   fn id(&self) -> String {
+/// #       "example-device".to_owned()
+/// #   }
+/// #   fn description(&self) -> DeviceDescription {
+/// #       DeviceDescription::default()
+/// #   }
+/// }
+///
+/// impl DeviceBuilder for ExampleDevice {
+///     type BuiltDevice = BuiltExampleDevice;
+///     fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
+///         BuiltExampleDevice {
+///             data,
+///             device_handle,
+///         }
+///     }
+/// }
+/// ```
+pub trait DeviceBuilder: DeviceStructure {
+    /// Type of [Device] to build.
+    type BuiltDevice: Device;
+
+    /// Build the [device][Device] from a data struct and an [device handle][DeviceHandle].
+    fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice;
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
         action::{tests::MockAction, NoInput},
         actions,
+        device::{tests::BuiltMockDevice, DeviceBuilder},
         event::{tests::MockEvent, NoData},
         events, properties,
         property::tests::MockProperty,
-        Actions, DeviceDescription, DeviceStructure, Events, Properties,
+        Actions, DeviceDescription, DeviceHandle, DeviceStructure, Events, Properties,
     };
 
     pub struct MockDevice {
@@ -173,6 +232,13 @@ pub(crate) mod tests {
             events![MockEvent::<NoData>::new(
                 MockDevice::EVENT_NODATA.to_owned()
             )]
+        }
+    }
+
+    impl DeviceBuilder for MockDevice {
+        type BuiltDevice = BuiltMockDevice;
+        fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
+            BuiltMockDevice::new(data, device_handle)
         }
     }
 }

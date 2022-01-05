@@ -21,11 +21,21 @@ use async_trait::async_trait;
 ///     foo: i32,
 /// }
 ///
+/// impl DeviceStructure for ExampleDevice {
+///     // ...
+///   # fn id(&self) -> String {
+///   #     "example-device".to_owned()
+///   # }
+///   # fn description(&self) -> DeviceDescription {
+///   #     DeviceDescription::default()
+///   # }
+/// }
+///
 /// #[async_trait]
 /// impl Device for BuiltExampleDevice {}
 /// ```
 #[async_trait]
-pub trait Device: DeviceHandleWrapper + Send + Sync + AsAny + 'static {}
+pub trait Device: BuiltDevice + Send + Sync + AsAny + 'static {}
 
 impl Downcast for dyn Device {}
 
@@ -35,13 +45,13 @@ impl Downcast for dyn Device {}
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, device::DeviceHandleWrapper};
+/// # use gateway_addon_rust::{prelude::*, device::BuiltDevice};
 /// # use async_trait::async_trait;
 /// struct BuiltExampleDevice {
 ///     device_handle: DeviceHandle,
 /// }
 ///
-/// impl DeviceHandleWrapper for BuiltExampleDevice {
+/// impl BuiltDevice for BuiltExampleDevice {
 ///     fn device_handle(&self) -> &DeviceHandle {
 ///         &self.device_handle
 ///     }
@@ -50,7 +60,7 @@ impl Downcast for dyn Device {}
 ///     }
 /// }
 /// ```
-pub trait DeviceHandleWrapper {
+pub trait BuiltDevice {
     /// Return a reference to the wrapped [device handle][DeviceHandle].
     fn device_handle(&self) -> &DeviceHandle;
 
@@ -58,86 +68,25 @@ pub trait DeviceHandleWrapper {
     fn device_handle_mut(&mut self) -> &mut DeviceHandle;
 }
 
-/// A trait used to build a [Device] around a data struct and a [device handle][DeviceHandle].
-///
-/// When you use the [device][macro@crate::device] macro, this will be implemented automatically.
-///
-/// # Examples
-/// ```
-/// # use gateway_addon_rust::{prelude::*, device::{DeviceHandleWrapper, BuildDevice}};
-/// # use async_trait::async_trait;
-/// struct ExampleDevice {
-///     foo: i32,
-/// }
-///
-/// struct BuiltExampleDevice {
-///     data: ExampleDevice,
-///     device_handle: DeviceHandle,
-/// }
-///
-/// impl DeviceHandleWrapper for BuiltExampleDevice {
-///     // ...
-///   # fn device_handle(&self) -> &DeviceHandle {
-///   #     &self.device_handle
-///   # }
-///   # fn device_handle_mut(&mut self) -> &mut DeviceHandle {
-///   #     &mut self.device_handle
-///   # }
-/// }
-///
-/// impl BuildDevice for ExampleDevice {
-///     type BuiltDevice = BuiltExampleDevice;
-///     fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
-///         BuiltExampleDevice {
-///             data,
-///             device_handle,
-///         }
-///     }
-/// }
-///
-/// impl DeviceStructure for ExampleDevice {
-///     /// ...
-/// #   fn id(&self) -> String {
-/// #       "example-device".to_owned()
-/// #   }
-/// #   fn description(&self) -> DeviceDescription {
-/// #       DeviceDescription::default()
-/// #   }
-/// }
-///
-/// #[async_trait]
-/// impl Device for BuiltExampleDevice {}
-/// ```
-pub trait BuildDevice {
-    /// Type of [Device] to build.
-    type BuiltDevice: Device;
-
-    /// Build the [device][Device] from a data struct and an [device handle][DeviceHandle].
-    fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice;
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::device::{
-        tests::MockDevice, BuildDevice, Device, DeviceHandle, DeviceHandleWrapper,
-    };
+    use crate::device::{tests::MockDevice, BuiltDevice, Device, DeviceHandle};
 
     pub struct BuiltMockDevice {
         data: MockDevice,
         device_handle: DeviceHandle,
     }
 
-    impl BuildDevice for MockDevice {
-        type BuiltDevice = BuiltMockDevice;
-        fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
-            BuiltMockDevice {
+    impl BuiltMockDevice {
+        pub fn new(data: MockDevice, device_handle: DeviceHandle) -> Self {
+            Self {
                 data,
                 device_handle,
             }
         }
     }
 
-    impl DeviceHandleWrapper for BuiltMockDevice {
+    impl BuiltDevice for BuiltMockDevice {
         fn device_handle(&self) -> &DeviceHandle {
             &self.device_handle
         }

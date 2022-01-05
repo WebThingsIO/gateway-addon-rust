@@ -7,8 +7,8 @@
 use crate::{
     client::Client,
     error::WebthingsError,
-    property::{BuildProperty, PropertyBase, Value},
-    Device, PropertyDescription, PropertyHandle,
+    property::{PropertyBase, Value},
+    Device, Property, PropertyDescription, PropertyHandle,
 };
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
@@ -19,7 +19,6 @@ use webthings_gateway_ipc_types::Property as FullPropertyDescription;
 /// # Examples
 /// ```
 /// # use gateway_addon_rust::prelude::*;
-/// // ...
 /// pub struct ExampleProperty {
 ///     foo: i32,
 /// }
@@ -52,13 +51,76 @@ pub trait PropertyStructure: Send + Sync + 'static {
     }
 }
 
-/// An object safe variant of [PropertyStructure] + [BuildProperty].
+/// A trait used to build a [Property] around a data struct and a [property handle][PropertyHandle].
 ///
-/// Auto-implemented for all objects which implement the [PropertyStructure] and [BuildProperty] traits. **You never have to implement this trait yourself.**
+/// When you use the [property][macro@crate::property] macro, this will be implemented automatically.
 ///
-/// Forwards all requests to the [PropertyStructure] / [BuildProperty] implementation.
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, property::{BuiltProperty, PropertyBuilder}};
+/// # use async_trait::async_trait;
+/// struct ExampleProperty {
+///     foo: i32,
+/// }
 ///
-/// This can (in contrast to the [PropertyStructure] and [BuildProperty] traits) be used to store objects for dynamic dispatch.
+/// struct BuiltExampleProperty {
+///     data: ExampleProperty,
+///     property_handle: PropertyHandle<i32>,
+/// }
+///
+/// impl BuiltProperty for BuiltExampleProperty {
+///     // ...
+///   # type Value = i32;
+///   # fn property_handle(&self) -> &PropertyHandle<i32> {
+///   #     &self.property_handle
+///   # }
+///   # fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
+///   #     &mut self.property_handle
+///   # }
+/// }
+///
+/// impl PropertyStructure for ExampleProperty {
+///     /// ...
+/// #   type Value = i32;
+/// #   fn name(&self) -> String {
+/// #       "example-property".to_owned()
+/// #   }
+/// #   fn description(&self) -> PropertyDescription<Self::Value> {
+/// #       PropertyDescription::default()
+/// #   }
+/// }
+///
+/// #[async_trait]
+/// impl Property for BuiltExampleProperty {}
+///
+/// impl PropertyBuilder for ExampleProperty {
+///     type BuiltProperty = BuiltExampleProperty;
+///     fn build(data: Self, property_handle: PropertyHandle<i32>) -> Self::BuiltProperty {
+///         BuiltExampleProperty {
+///             data,
+///             property_handle,
+///         }
+///     }
+/// }
+/// ```
+pub trait PropertyBuilder: PropertyStructure {
+    /// Type of [Property] to build.
+    type BuiltProperty: Property;
+
+    /// Build the [property][Property] from a data struct and an [property handle][PropertyHandle].
+    fn build(
+        data: Self,
+        property_handle: PropertyHandle<<Self as PropertyStructure>::Value>,
+    ) -> Self::BuiltProperty;
+}
+
+/// An object safe variant of [PropertyBuilder] + [PropertyStructure].
+///
+/// Auto-implemented for all objects which implement the [PropertyBuilder] trait. **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [PropertyBuilder] / [PropertyStructure] implementation.
+///
+/// This can (in contrast to to the [PropertyBuilder] trait) be used to store objects for dynamic dispatch.
 pub trait PropertyBuilderBase: Send + Sync + 'static {
     /// Name of the property.
     fn name(&self) -> String;
@@ -78,7 +140,7 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
     ) -> Box<dyn PropertyBase>;
 }
 
-impl<T: BuildProperty> PropertyBuilderBase for T {
+impl<T: PropertyBuilder> PropertyBuilderBase for T {
     fn name(&self) -> String {
         <T as PropertyStructure>::name(self)
     }
@@ -104,14 +166,16 @@ impl<T: BuildProperty> PropertyBuilderBase for T {
             self.name(),
             self.description(),
         );
-        Box::new(<T as BuildProperty>::build(*self, property_handle))
+        Box::new(<T as PropertyBuilder>::build(*self, property_handle))
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::ops::{Deref, DerefMut};
+
     use crate::{
-        property::{self, tests::BuiltMockProperty, BuildProperty},
+        property::{self, tests::BuiltMockProperty, PropertyBuilder},
         PropertyDescription, PropertyHandle, PropertyStructure,
     };
     use mockall::mock;
@@ -136,6 +200,20 @@ pub(crate) mod tests {
         }
     }
 
+    impl<T: property::Value> Deref for MockProperty<T> {
+        type Target = MockPropertyHelper<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.property_helper
+        }
+    }
+
+    impl<T: property::Value> DerefMut for MockProperty<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.property_helper
+        }
+    }
+
     impl<T: property::Value> PropertyStructure for MockProperty<T> {
         type Value = T;
 
@@ -148,7 +226,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl<T: property::Value> BuildProperty for MockProperty<T> {
+    impl<T: property::Value> PropertyBuilder for MockProperty<T> {
         type BuiltProperty = BuiltMockProperty<T>;
         fn build(data: Self, property_handle: PropertyHandle<T>) -> Self::BuiltProperty {
             BuiltMockProperty::new(data, property_handle)

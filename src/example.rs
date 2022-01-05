@@ -9,14 +9,14 @@
 use crate::{
     action::NoInput,
     actions,
-    adapter::{AdapterHandleWrapper, BuildAdapter},
-    device::{BuildDevice, DeviceHandleWrapper},
+    adapter::{BuiltAdapter, AdapterBuilder},
+    device::{DeviceBuilder, BuiltDevice},
     error::WebthingsError,
     event::NoData,
     events,
     plugin::connect,
     properties,
-    property::{BuildProperty, PropertyHandleWrapper},
+    property::{PropertyBuilder, BuiltProperty},
     Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
     DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, Events, Properties,
     Property, PropertyDescription, PropertyHandle, PropertyStructure,
@@ -48,7 +48,7 @@ pub struct BuiltExampleAdapter {
     adapter_handle: AdapterHandle,
 }
 
-impl BuildAdapter for ExampleAdapter {
+impl AdapterBuilder for ExampleAdapter {
     type BuiltAdapter = BuiltExampleAdapter;
     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
         BuiltExampleAdapter {
@@ -58,7 +58,7 @@ impl BuildAdapter for ExampleAdapter {
     }
 }
 
-impl AdapterHandleWrapper for BuiltExampleAdapter {
+impl BuiltAdapter for BuiltExampleAdapter {
     fn adapter_handle(&self) -> &AdapterHandle {
         &self.adapter_handle
     }
@@ -105,7 +105,7 @@ pub struct BuiltExampleDevice {
     device_handle: DeviceHandle,
 }
 
-impl BuildDevice for ExampleDevice {
+impl DeviceBuilder for ExampleDevice {
     type BuiltDevice = BuiltExampleDevice;
     fn build(data: Self, device_handle: DeviceHandle) -> Self::BuiltDevice {
         BuiltExampleDevice {
@@ -115,7 +115,7 @@ impl BuildDevice for ExampleDevice {
     }
 }
 
-impl DeviceHandleWrapper for BuiltExampleDevice {
+impl BuiltDevice for BuiltExampleDevice {
     fn device_handle(&self) -> &DeviceHandle {
         &self.device_handle
     }
@@ -175,7 +175,7 @@ pub struct BuiltExampleProperty {
     property_handle: PropertyHandle<<ExampleProperty as PropertyStructure>::Value>,
 }
 
-impl BuildProperty for ExampleProperty {
+impl PropertyBuilder for ExampleProperty {
     type BuiltProperty = BuiltExampleProperty;
     fn build(
         data: Self,
@@ -188,7 +188,7 @@ impl BuildProperty for ExampleProperty {
     }
 }
 
-impl PropertyHandleWrapper for BuiltExampleProperty {
+impl BuiltProperty for BuiltExampleProperty {
     type Value = <ExampleProperty as PropertyStructure>::Value;
 
     fn property_handle(&self) -> &PropertyHandle<Self::Value> {
