@@ -9,6 +9,16 @@
 ///     foo: i32,
 /// }
 ///
+/// impl AdapterStructure for ExampleAdapter {
+///     // ...
+///     # fn id(&self) -> String {
+///     #     "example-adapter".to_owned()
+///     # }
+///     # fn name(&self) -> String {
+///     #     "Example Adapter".to_owned()
+///     # }
+/// }
+///
 /// #[async_trait]
 /// impl Adapter for BuiltExampleAdapter {
 ///     // ...
@@ -21,6 +31,16 @@
 /// # use async_trait::async_trait;
 /// struct ExampleAdapter {
 ///     foo: i32,
+/// }
+///
+/// impl AdapterStructure for ExampleAdapter {
+///     // ...
+///     # fn id(&self) -> String {
+///     #     "example-adapter".to_owned()
+///     # }
+///     # fn name(&self) -> String {
+///     #     "Example Adapter".to_owned()
+///     # }
 /// }
 ///
 /// struct BuiltExampleAdapter {

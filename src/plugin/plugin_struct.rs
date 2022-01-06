@@ -80,7 +80,7 @@ impl Plugin {
             .ok_or(WebthingsError::UnknownAdapter(adapter_id))
     }
 
-    /// Create a new adapter.
+    /// Add an adapter.
     ///
     /// # Examples
     /// ```no_run
@@ -89,24 +89,22 @@ impl Plugin {
     /// # async fn main() -> Result<(), WebthingsError> {
     /// #   let mut plugin = connect("example-addon").await?;
     /// let adapter = plugin
-    ///     .create_adapter("example_adapter", "Example Adapter", ExampleAdapter::new())
+    ///     .add_adapter(ExampleAdapter::new())
     ///     .await?;
     /// #   plugin.event_loop().await;
     /// #   Ok(())
     /// # }
     /// ```
-    pub async fn create_adapter<T: AdapterBuilder>(
+    pub async fn add_adapter<T: AdapterBuilder>(
         &mut self,
-        adapter_id: impl Into<String>,
-        name: impl Into<String>,
         adapter: T,
     ) -> Result<Arc<Mutex<Box<dyn Adapter>>>, WebthingsError> {
-        let adapter_id = adapter_id.into();
-
+        let adapter_id = adapter.id();
+        let adapter_name = adapter.name();
         let message: Message = AdapterAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             adapter_id: adapter_id.clone(),
-            name: name.into(),
+            name: adapter_name,
             package_name: self.plugin_id.clone(),
         }
         .into();
@@ -197,9 +195,6 @@ pub(crate) mod tests {
         plugin: &mut Plugin,
         adapter_id: &str,
     ) -> Arc<Mutex<Box<dyn Adapter>>> {
-        let plugin_id = plugin.plugin_id.to_owned();
-        let adapter_id_clone = adapter_id.to_owned();
-
         plugin
             .client
             .lock()
@@ -207,7 +202,7 @@ pub(crate) mod tests {
             .expect_send_message()
             .withf(move |msg| match msg {
                 Message::AdapterAddedNotification(msg) => {
-                    msg.data.plugin_id == plugin_id && msg.data.adapter_id == adapter_id_clone
+                    msg.data.plugin_id == PLUGIN_ID && msg.data.adapter_id == ADAPTER_ID
                 }
                 _ => false,
             })
@@ -215,7 +210,7 @@ pub(crate) mod tests {
             .returning(|_| Ok(()));
 
         plugin
-            .create_adapter(adapter_id, adapter_id, MockAdapter::new())
+            .add_adapter(MockAdapter::new(adapter_id.to_owned()))
             .await
             .unwrap()
     }
@@ -248,7 +243,7 @@ pub(crate) mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_create_adapter(mut plugin: Plugin) {
+    async fn test_add_adapter(mut plugin: Plugin) {
         add_mock_adapter(&mut plugin, ADAPTER_ID).await;
         assert!(plugin.borrow_adapter(ADAPTER_ID).is_ok());
     }

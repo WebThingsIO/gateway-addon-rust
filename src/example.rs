@@ -17,8 +17,8 @@ use crate::{
     plugin::connect,
     properties,
     property::{BuiltProperty, PropertyBuilder},
-    Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
-    DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, EventHandle,
+    Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, AdapterStructure,
+    Device, DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, EventHandle,
     EventStructure, Events, Properties, Property, PropertyDescription, PropertyHandle,
     PropertyStructure,
 };
@@ -28,9 +28,7 @@ use async_trait::async_trait;
 #[tokio::main]
 pub async fn main() -> Result<(), WebthingsError> {
     let mut plugin = connect("example-addon").await?;
-    let adapter = plugin
-        .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new())
-        .await?;
+    let adapter = plugin.add_adapter(ExampleAdapter::new()).await?;
     adapter
         .lock()
         .await
@@ -47,6 +45,15 @@ pub struct ExampleAdapter;
 pub struct BuiltExampleAdapter {
     data: ExampleAdapter,
     adapter_handle: AdapterHandle,
+}
+
+impl AdapterStructure for ExampleAdapter {
+    fn id(&self) -> String {
+        "example-adapter".to_owned()
+    }
+    fn name(&self) -> String {
+        "Example Adapter".to_owned()
+    }
 }
 
 impl AdapterBuilder for ExampleAdapter {

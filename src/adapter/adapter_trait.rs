@@ -4,8 +4,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.*
  */
 
-//! A module for everything related to WebthingsIO adapters.
-
 use crate::AdapterHandle;
 use as_any::{AsAny, Downcast};
 use async_trait::async_trait;
@@ -14,7 +12,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 
 /// A trait used to specify the behaviour of a WebthingsIO adapter.
 ///
-/// Defines how to react on gateway requests. Created through a [plugin][crate::Plugin].
+/// Defines how to react on gateway requests.
 ///
 /// # Examples
 /// ```no_run
@@ -24,6 +22,16 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 /// # use as_any::Downcast;
 /// #[adapter]
 /// struct ExampleAdapter { foo: i32 }
+///
+/// impl AdapterStructure for ExampleAdapter {
+///     // ...
+///     # fn id(&self) -> String {
+///     #     "example-adapter".to_owned()
+///     # }
+///     # fn name(&self) -> String {
+///     #     "Example Adapter".to_owned()
+///     # }
+/// }
 ///
 /// #[async_trait]
 /// impl Adapter for BuiltExampleAdapter {
@@ -51,7 +59,7 @@ use webthings_gateway_ipc_types::DeviceWithoutId;
 /// pub async fn main() -> Result<(), WebthingsError> {
 ///     let mut plugin = connect("example-addon").await?;
 ///     let adapter = plugin
-///         .create_adapter("example-adapter", "Example Adapter", ExampleAdapter::new(42))
+///         .add_adapter(ExampleAdapter::new(42))
 ///         .await?;
 ///     adapter
 ///         .lock()
@@ -135,88 +143,24 @@ pub trait BuiltAdapter {
     fn adapter_handle_mut(&mut self) -> &mut AdapterHandle;
 }
 
-/// A trait used to build an [Adapter] around a data struct and an [adapter handle][AdapterHandle].
-///
-/// When you use the [adapter][macro@crate::adapter] macro, this will be implemented automatically.
-///
-/// # Examples
-/// ```
-/// # use gateway_addon_rust::{prelude::*, adapter::{BuiltAdapter, AdapterBuilder}};
-/// # use async_trait::async_trait;
-/// struct ExampleAdapter {
-///     foo: i32,
-/// }
-///
-/// struct BuiltExampleAdapter {
-///     data: ExampleAdapter,
-///     adapter_handle: AdapterHandle,
-/// }
-///
-/// impl BuiltAdapter for BuiltExampleAdapter {
-///     // ...
-/// #   fn adapter_handle(&self) -> &AdapterHandle {
-/// #       &self.adapter_handle
-/// #   }
-/// #   fn adapter_handle_mut(&mut self) -> &mut AdapterHandle {
-/// #       &mut self.adapter_handle
-/// #   }
-/// }
-///
-/// #[async_trait]
-/// impl Adapter for BuiltExampleAdapter {}
-///
-/// impl AdapterBuilder for ExampleAdapter {
-///     type BuiltAdapter = BuiltExampleAdapter;
-///     fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
-///         BuiltExampleAdapter {
-///             data,
-///             adapter_handle,
-///         }
-///     }
-/// }
-/// ```
-pub trait AdapterBuilder {
-    /// Type of [Adapter] to build.
-    type BuiltAdapter: Adapter;
-
-    /// Build the [adapter][Adapter] from a data struct and an [adapter handle][AdapterHandle].
-    fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter;
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::{
-        adapter::{AdapterBuilder, BuiltAdapter},
+        adapter::{tests::MockAdapter, BuiltAdapter},
         Adapter, AdapterHandle,
     };
     use async_trait::async_trait;
-    use mockall::mock;
     use std::time::Duration;
     use webthings_gateway_ipc_types::DeviceWithoutId;
-
-    mock! {
-        pub Adapter {
-            pub async fn on_unload(&mut self) -> Result<(), String>;
-            pub async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String>;
-            pub async fn on_cancel_pairing(&mut self) -> Result<(), String>;
-            pub async fn on_device_saved(
-                &mut self,
-                device_id: String,
-                device_description: DeviceWithoutId
-            ) -> Result<(), String>;
-            pub async fn on_remove_device(&mut self, device_id: String) -> Result<(), String>;
-        }
-    }
 
     pub struct BuiltMockAdapter {
         data: MockAdapter,
         adapter_handle: AdapterHandle,
     }
 
-    impl AdapterBuilder for MockAdapter {
-        type BuiltAdapter = BuiltMockAdapter;
-        fn build(data: Self, adapter_handle: AdapterHandle) -> Self::BuiltAdapter {
-            BuiltMockAdapter {
+    impl BuiltMockAdapter {
+        pub fn new(data: MockAdapter, adapter_handle: AdapterHandle) -> Self {
+            Self {
                 data,
                 adapter_handle,
             }
@@ -249,15 +193,15 @@ pub(crate) mod tests {
     #[async_trait]
     impl Adapter for BuiltMockAdapter {
         async fn on_unload(&mut self) -> Result<(), String> {
-            self.data.on_unload().await
+            self.adapter_helper.on_unload().await
         }
 
         async fn on_start_pairing(&mut self, timeout: Duration) -> Result<(), String> {
-            self.data.on_start_pairing(timeout).await
+            self.adapter_helper.on_start_pairing(timeout).await
         }
 
         async fn on_cancel_pairing(&mut self) -> Result<(), String> {
-            self.data.on_cancel_pairing().await
+            self.adapter_helper.on_cancel_pairing().await
         }
 
         async fn on_device_saved(
@@ -265,13 +209,13 @@ pub(crate) mod tests {
             device_id: String,
             device_description: DeviceWithoutId,
         ) -> Result<(), String> {
-            self.data
+            self.adapter_helper
                 .on_device_saved(device_id, device_description)
                 .await
         }
 
         async fn on_remove_device(&mut self, device_id: String) -> Result<(), String> {
-            self.data.on_remove_device(device_id).await
+            self.adapter_helper.on_remove_device(device_id).await
         }
     }
 }

@@ -11,6 +11,16 @@ mod private_module {
 
     #[adapter]
     pub struct TestAdapter;
+
+    impl AdapterStructure for TestAdapter {
+        fn id(&self) -> String {
+            "test-adapter".to_owned()
+        }
+
+        fn name(&self) -> String {
+            "Test Adapter".to_owned()
+        }
+    }
 }
 
 impl Adapter for private_module::BuiltTestAdapter {}
