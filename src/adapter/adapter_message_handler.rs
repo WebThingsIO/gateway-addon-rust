@@ -28,7 +28,7 @@ impl MessageHandler for dyn Adapter {
                     .await
                     .map_err(|err| format!("Could not unload adapter: {}", err))?;
 
-                self.adapter_handle_mut()
+                self.adapter_handle()
                     .unload()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
@@ -72,7 +72,7 @@ impl MessageHandler for dyn Adapter {
                 data: DeviceRemoveActionRequestMessageData { device_id, .. },
                 ..
             }) => {
-                self.adapter_handle_mut()
+                self.adapter_handle()
                     .get_device(device_id)
                     .ok_or_else(|| format!("Unknown device: {}", device_id))?
                     .lock()
@@ -151,7 +151,7 @@ mod tests {
         assert!(adapter
             .lock()
             .await
-            .adapter_handle_mut()
+            .adapter_handle()
             .get_device(DEVICE_ID)
             .is_none())
     }

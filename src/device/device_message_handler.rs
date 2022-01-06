@@ -20,7 +20,7 @@ impl MessageHandler for dyn Device {
         match message {
             IPCMessage::DeviceSetPropertyCommand(DeviceSetPropertyCommand { data, .. }) => {
                 let property = self
-                    .device_handle_mut()
+                    .device_handle()
                     .get_property(&data.property_name)
                     .ok_or_else(|| {
                         format!(
@@ -45,7 +45,7 @@ impl MessageHandler for dyn Device {
             }
             IPCMessage::DeviceRequestActionRequest(DeviceRequestActionRequest { data, .. }) => {
                 let result = self
-                    .device_handle_mut()
+                    .device_handle()
                     .request_action(
                         data.action_name.clone(),
                         data.action_id.clone(),
@@ -63,7 +63,7 @@ impl MessageHandler for dyn Device {
                 }
                 .into();
 
-                self.device_handle_mut()
+                self.device_handle()
                     .client
                     .lock()
                     .await
@@ -95,7 +95,7 @@ impl MessageHandler for dyn Device {
                 }
                 .into();
 
-                self.device_handle_mut()
+                self.device_handle()
                     .client
                     .lock()
                     .await
@@ -161,8 +161,8 @@ pub(crate) mod tests {
         let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
         {
-            let mut device = device.lock().await;
-            let action = device.device_handle_mut().get_action(action_name).unwrap();
+            let device = device.lock().await;
+            let action = device.device_handle().get_action(action_name).unwrap();
             let mut action = action.lock().await;
             let action = action.as_any_mut().downcast_mut::<MockAction<T>>().unwrap();
             action
@@ -213,9 +213,9 @@ pub(crate) mod tests {
         let device = add_mock_device(adapter.lock().await.adapter_handle_mut(), DEVICE_ID).await;
 
         {
-            let mut device = device.lock().await;
+            let device = device.lock().await;
             let action = device
-                .device_handle_mut()
+                .device_handle()
                 .get_action(action_name.to_owned())
                 .unwrap();
             let mut action = action.lock().await;
@@ -284,11 +284,8 @@ pub(crate) mod tests {
 
         {
             let expected_value = expected_value.clone();
-            let mut device = device.lock().await;
-            let property = device
-                .device_handle_mut()
-                .get_property(property_name)
-                .unwrap();
+            let device = device.lock().await;
+            let property = device.device_handle().get_property(property_name).unwrap();
             let mut property = property.lock().await;
             let property = property.downcast_mut::<BuiltMockProperty<T>>().unwrap();
             property
@@ -339,7 +336,7 @@ pub(crate) mod tests {
         assert!(device
             .lock()
             .await
-            .device_handle_mut()
+            .device_handle()
             .adapter
             .upgrade()
             .is_some())
@@ -354,13 +351,13 @@ pub(crate) mod tests {
         let property = device
             .lock()
             .await
-            .device_handle_mut()
+            .device_handle()
             .get_property(MockDevice::PROPERTY_I32)
             .unwrap();
         assert!(property
             .lock()
             .await
-            .property_handle_mut()
+            .property_handle()
             .downcast_ref::<PropertyHandle<i32>>()
             .unwrap()
             .device
@@ -377,7 +374,7 @@ pub(crate) mod tests {
         let event = device
             .lock()
             .await
-            .device_handle_mut()
+            .device_handle()
             .get_event(MockDevice::EVENT_NODATA)
             .unwrap();
         assert!(event
