@@ -49,6 +49,7 @@ fn alter_struct(
     generic_name: Option<&str>,
 ) -> TokenStream2 {
     let struct_name = ast.ident.clone();
+    let visibility = ast.vis.clone();
     let struct_built_name = TokenStream2::from_str(&format!("Built{}", struct_name)).unwrap();
 
     let trait_handle_wrapper = TokenStream2::from_str(&format!(
@@ -100,7 +101,7 @@ fn alter_struct(
                 #struct_built_name { data, #fn_handle }
             }
         }
-        struct #struct_built_name {
+        #visibility struct #struct_built_name {
             data: #struct_name,
             #fn_handle: #struct_handle,
         }
