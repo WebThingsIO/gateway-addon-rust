@@ -37,15 +37,17 @@ pub mod prelude {
     pub use crate::{
         action::{self, Action, ActionDescription, ActionHandle, Actions},
         actions,
-        adapter::{adapter, Adapter, AdapterHandle},
-        device::{device, Device, DeviceDescription, DeviceHandle, DeviceStructure},
-        event::{self, event, Event, EventDescription, EventHandle, EventStructure, Events},
+        adapter::{adapter, Adapter, AdapterHandle, BuiltAdapter},
+        device::{device, BuiltDevice, Device, DeviceDescription, DeviceHandle, DeviceStructure},
+        event::{
+            self, event, BuiltEvent, Event, EventDescription, EventHandle, EventStructure, Events,
+        },
         events,
         plugin::Plugin,
         properties,
         property::{
-            self, property, Properties, Property, PropertyDescription, PropertyHandle,
-            PropertyStructure,
+            self, property, BuiltProperty, Properties, Property, PropertyDescription,
+            PropertyHandle, PropertyStructure,
         },
     };
 }
