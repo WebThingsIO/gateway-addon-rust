@@ -122,11 +122,11 @@ pub(crate) mod tests {
         action::{tests::MockAction, Input, NoInput},
         adapter::tests::add_mock_device,
         device::tests::MockDevice,
-        event::NoData,
+        event::{tests::BuiltMockEvent, BuiltEvent, NoData},
         message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
         property::{self, tests::BuiltMockProperty},
-        EventHandle, Plugin, PropertyHandle,
+        Plugin, PropertyHandle,
     };
     use as_any::Downcast;
     use rstest::rstest;
@@ -383,8 +383,9 @@ pub(crate) mod tests {
         assert!(event
             .lock()
             .await
-            .downcast_ref::<EventHandle<NoData>>()
+            .downcast_ref::<BuiltMockEvent<NoData>>()
             .unwrap()
+            .event_handle()
             .device
             .upgrade()
             .is_some())

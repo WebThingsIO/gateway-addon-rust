@@ -64,10 +64,10 @@ pub trait DeviceStructure: Send + Sync + 'static {
         actions![]
     }
 
-    /// A list of [events][crate::Event] this device should own.
+    /// A list of [events][crate::event::EventBuilder] this device should own.
     ///
-    /// Note that the desired list consists of boxed objects implementing [EventBase][crate::event::EventBase].
-    /// You can use the convenienve macro [events!][crate::events] to create this list from [Event][crate::Event]s.
+    /// Note that the desired list consists of boxed objects implementing [EventBuilderBase][crate::event::EventBuilderBase].
+    /// You can use the convenienve macro [events!][crate::events] to create this list from [EventBuilder][crate::event::EventBuilder]s.
     fn events(&self) -> Events {
         events![]
     }

@@ -39,7 +39,7 @@ pub mod prelude {
         actions,
         adapter::{adapter, Adapter, AdapterHandle},
         device::{device, Device, DeviceDescription, DeviceHandle, DeviceStructure},
-        event::{self, Event, EventDescription, EventHandle, Events},
+        event::{self, event, Event, EventDescription, EventHandle, EventStructure, Events},
         events,
         plugin::Plugin,
         properties,

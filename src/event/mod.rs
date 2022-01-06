@@ -6,18 +6,22 @@
 
 //! A module for everything related to WoT events.
 
+mod event_builder;
 mod event_data;
 mod event_description;
 mod event_handle;
+mod event_macro;
 mod event_trait;
 
+pub use event_builder::*;
 pub use event_data::*;
 pub use event_description::*;
 pub use event_handle::*;
+pub use event_macro::*;
 pub use event_trait::*;
 
-/// Convenience type for a collection of [EventBase].
-pub type Events = Vec<Box<dyn EventBase>>;
+/// Convenience type for a collection of [EventBuilderBase].
+pub type Events = Vec<Box<dyn EventBuilderBase>>;
 
 /// Convenience macro for building an [Events].
 ///
@@ -37,5 +41,5 @@ macro_rules! events [
 
 #[cfg(test)]
 pub(crate) mod tests {
-    pub use super::event_trait::tests::*;
+    pub use super::{event_builder::tests::*, event_trait::tests::*};
 }

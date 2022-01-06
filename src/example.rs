@@ -12,14 +12,15 @@ use crate::{
     adapter::{AdapterBuilder, BuiltAdapter},
     device::{BuiltDevice, DeviceBuilder},
     error::WebthingsError,
-    event::NoData,
+    event::{BuiltEvent, EventBuilder, NoData},
     events,
     plugin::connect,
     properties,
     property::{BuiltProperty, PropertyBuilder},
     Action, ActionDescription, ActionHandle, Actions, Adapter, AdapterHandle, Device,
-    DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, Events, Properties,
-    Property, PropertyDescription, PropertyHandle, PropertyStructure,
+    DeviceDescription, DeviceHandle, DeviceStructure, Event, EventDescription, EventHandle,
+    EventStructure, Events, Properties, Property, PropertyDescription, PropertyHandle,
+    PropertyStructure,
 };
 use as_any::Downcast;
 use async_trait::async_trait;
@@ -259,9 +260,49 @@ impl ExampleAction {
     }
 }
 
-pub struct ExampleEvent();
+pub struct ExampleEvent;
 
-impl Event for ExampleEvent {
+pub struct BuiltExampleEvent {
+    data: ExampleEvent,
+    event_handle: EventHandle<<ExampleEvent as EventStructure>::Data>,
+}
+
+impl EventBuilder for ExampleEvent {
+    type BuiltEvent = BuiltExampleEvent;
+    fn build(
+        data: Self,
+        event_handle: EventHandle<<Self as EventStructure>::Data>,
+    ) -> Self::BuiltEvent {
+        BuiltExampleEvent { data, event_handle }
+    }
+}
+
+impl BuiltEvent for BuiltExampleEvent {
+    type Data = <ExampleEvent as EventStructure>::Data;
+
+    fn event_handle(&self) -> &EventHandle<Self::Data> {
+        &self.event_handle
+    }
+
+    fn event_handle_mut(&mut self) -> &mut EventHandle<Self::Data> {
+        &mut self.event_handle
+    }
+}
+
+impl std::ops::Deref for BuiltExampleEvent {
+    type Target = ExampleEvent;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for BuiltExampleEvent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl EventStructure for ExampleEvent {
     type Data = NoData;
 
     fn name(&self) -> String {
@@ -273,9 +314,10 @@ impl Event for ExampleEvent {
     }
 }
 
+impl Event for BuiltExampleEvent {}
+
 impl ExampleEvent {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self()
+        Self
     }
 }

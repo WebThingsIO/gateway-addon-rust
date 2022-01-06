@@ -5,169 +5,171 @@
  */
 
 use crate::{
-    client::Client, error::WebthingsError, event::Data, Device, EventDescription, EventHandle,
+    event::{Data, EventHandleBase},
+    EventHandle,
 };
 use as_any::{AsAny, Downcast};
 
-use std::sync::{Arc, Weak};
-use tokio::sync::Mutex;
-use webthings_gateway_ipc_types::Event as FullEventDescription;
-
-use super::EventHandleBase;
-
-/// A trait used to specify the structure and behaviour of a WoT event.
+/// A trait used to specify the behaviour of a WoT event.
 ///
-/// Initialized with an [event handle][EventHandle].
+/// Built by a [crate::EventHandle].
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, event::NoData};
+/// # use gateway_addon_rust::{prelude::*, event::NoData, event::BuiltEvent};
 /// # use async_trait::async_trait;
 /// # use std::time::Duration;
 /// # use tokio::time::sleep;
-/// struct ExampleEvent();
+/// #[event]
+/// struct ExampleEvent {
+///     foo: i32,
+/// }
+///
+/// impl EventStructure for ExampleEvent {
+///     // ...
+///     # type Data = NoData;
+///     # fn name(&self) -> String {
+///     #     "example-event".to_owned()
+///     # }
+///     # fn description(&self) -> EventDescription<Self::Data> {
+///     #     EventDescription::default()
+///     # }
+/// }
 ///
 /// #[async_trait]
-/// impl Event for ExampleEvent {
-///     type Data = NoData;
-///
-///     fn name(&self) -> String {
-///         "example-event".to_owned()
-///     }
-///     fn description(&self) -> EventDescription<Self::Data> {
-///         EventDescription::default()
-///     }
-///     fn init(&self, event_handle: EventHandle<Self::Data>) {
-///         tokio::spawn(async move {
+/// impl Event for BuiltExampleEvent {
+///     fn post_init(&mut self) {
+///         let event_handle = self.event_handle().clone();
+///         tokio::task::spawn(async move {
 ///             sleep(Duration::from_millis(1000)).await;
 ///             event_handle.raise(NoData).await.unwrap();
 ///         });
 ///     }
 /// }
 /// ```
-pub trait Event: Send + Sync + 'static {
-    /// Type of [data][Data] this event contains.
-    type Data: Data;
-
-    /// Name of the event.
-    fn name(&self) -> String;
-
-    /// [WoT description][EventDescription] of the event.
-    fn description(&self) -> EventDescription<Self::Data>;
-
-    /// Called once during initialization with an [event handle][EventHandle] which can later be used to raise event instances.
-    fn init(&self, _event_handle: EventHandle<Self::Data>) {}
-
-    #[doc(hidden)]
-    fn full_description(&self) -> Result<FullEventDescription, WebthingsError> {
-        self.description().into_full_description(self.name())
-    }
-
-    #[doc(hidden)]
-    fn build_event_handle(
-        &self,
-        client: Arc<Mutex<Client>>,
-        device: Weak<Mutex<Box<dyn Device>>>,
-        plugin_id: String,
-        adapter_id: String,
-        device_id: String,
-        name: String,
-    ) -> EventHandle<Self::Data> {
-        let event_handle = EventHandle::new(
-            client,
-            device,
-            plugin_id,
-            adapter_id,
-            device_id,
-            name,
-            self.description(),
-        );
-        self.init(event_handle.clone());
-        event_handle
-    }
+pub trait Event: BuiltEvent + Send + Sync + 'static {
+    /// Called once after initialization.
+    fn post_init(&mut self) {}
 }
 
-/// An object safe variant of [Event].
+/// An object safe variant of [Event] + [BuiltEvent].
 ///
 /// Auto-implemented for all objects which implement the [Event] trait.  **You never have to implement this trait yourself.**
 ///
-/// Forwards all requests to the [Event] implementation.
+/// Forwards all requests to the [Event] / [BuiltEvent] implementation.
 ///
-/// This can (in contrast to the [Event] trait) be used to store objects for dynamic dispatch.
+/// This can (in contrast to the [Event] and [BuiltEvent] traits) be used to store objects for dynamic dispatch.
 pub trait EventBase: Send + Sync + AsAny + 'static {
-    /// Name of the event.
-    fn name(&self) -> String;
+    /// Return a reference to the wrapped [event handle][EventHandle].
+    fn event_handle(&self) -> &dyn EventHandleBase;
+
+    /// Return a mutable reference to the wrapped [event handle][EventHandle].
+    fn event_handle_mut(&mut self) -> &mut dyn EventHandleBase;
 
     #[doc(hidden)]
-    fn full_description(&self) -> Result<FullEventDescription, WebthingsError>;
-
-    #[doc(hidden)]
-    fn build_event_handle(
-        &self,
-        client: Arc<Mutex<Client>>,
-        device: Weak<Mutex<Box<dyn Device>>>,
-        plugin_id: String,
-        adapter_id: String,
-        device_id: String,
-        name: String,
-    ) -> Box<dyn EventHandleBase>;
+    fn post_init(&mut self);
 }
 
 impl Downcast for dyn EventBase {}
 
 impl<T: Event> EventBase for T {
-    fn name(&self) -> String {
-        <T as Event>::name(self)
+    fn event_handle(&self) -> &dyn EventHandleBase {
+        <T as BuiltEvent>::event_handle(self)
     }
 
-    fn full_description(&self) -> Result<FullEventDescription, WebthingsError> {
-        <T as Event>::full_description(self)
+    fn event_handle_mut(&mut self) -> &mut dyn EventHandleBase {
+        <T as BuiltEvent>::event_handle_mut(self)
     }
 
-    fn build_event_handle(
-        &self,
-        client: Arc<Mutex<Client>>,
-        device: Weak<Mutex<Box<dyn Device>>>,
-        plugin_id: String,
-        adapter_id: String,
-        device_id: String,
-        name: String,
-    ) -> Box<dyn EventHandleBase> {
-        Box::new(<T as Event>::build_event_handle(
-            self, client, device, plugin_id, adapter_id, device_id, name,
-        ))
+    fn post_init(&mut self) {
+        <T as Event>::post_init(self)
     }
+}
+
+/// A trait used to wrap a [event handle][EventHandle].
+///
+/// When you use the [event][macro@crate::event] macro, this will be implemented automatically.
+///
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, event::{BuiltEvent, NoData}};
+/// # use async_trait::async_trait;
+/// struct BuiltExampleEvent {
+///     event_handle: EventHandle<NoData>,
+/// }
+///
+/// impl BuiltEvent for BuiltExampleEvent {
+///     type Data = NoData;
+///     fn event_handle(&self) -> &EventHandle<Self::Data> {
+///         &self.event_handle
+///     }
+///     fn event_handle_mut(&mut self) -> &mut EventHandle<Self::Data> {
+///         &mut self.event_handle
+///     }
+/// }
+/// ```
+pub trait BuiltEvent {
+    /// Type of [data][Data] this event contains.
+    type Data: Data;
+
+    /// Return a reference to the wrapped [event handle][EventHandle].
+    fn event_handle(&self) -> &EventHandle<Self::Data>;
+
+    /// Return a mutable reference to the wrapped [event handle][EventHandle].
+    fn event_handle_mut(&mut self) -> &mut EventHandle<Self::Data>;
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::{event::Data, Event, EventDescription};
+    use std::ops::{Deref, DerefMut};
 
-    use std::marker::PhantomData;
+    use crate::{
+        event::{tests::MockEvent, BuiltEvent, Data},
+        Event, EventHandle,
+    };
 
-    pub struct MockEvent<T: Data> {
-        event_name: String,
-        _data: PhantomData<T>,
+    pub struct BuiltMockEvent<T: Data> {
+        data: MockEvent<T>,
+        event_handle: EventHandle<T>,
     }
 
-    impl<T: Data> MockEvent<T> {
-        pub fn new(event_name: String) -> Self {
-            Self {
-                event_name,
-                _data: PhantomData,
-            }
+    impl<T: Data> BuiltMockEvent<T> {
+        pub fn new(data: MockEvent<T>, event_handle: EventHandle<T>) -> Self {
+            Self { data, event_handle }
         }
     }
 
-    impl<T: Data> Event for MockEvent<T> {
+    impl<T: Data> Deref for BuiltMockEvent<T> {
+        type Target = MockEvent<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.data
+        }
+    }
+
+    impl<T: Data> DerefMut for BuiltMockEvent<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.data
+        }
+    }
+
+    impl<T: Data> BuiltEvent for BuiltMockEvent<T> {
         type Data = T;
 
-        fn name(&self) -> String {
-            self.event_name.clone()
+        fn event_handle(&self) -> &EventHandle<Self::Data> {
+            &self.event_handle
         }
 
-        fn description(&self) -> EventDescription<Self::Data> {
-            EventDescription::default()
+        fn event_handle_mut(&mut self) -> &mut EventHandle<Self::Data> {
+            &mut self.event_handle
+        }
+    }
+
+    impl<T: Data> Event for BuiltMockEvent<T> {
+        fn post_init(&mut self) {
+            if self.expect_post_init {
+                self.event_helper.post_init();
+            }
         }
     }
 }

@@ -88,8 +88,8 @@ impl AdapterHandle {
                 device_handle.add_action(action);
             }
 
-            for event in events {
-                device_handle.add_event(event);
+            for event_builder in events {
+                device_handle.add_event(event_builder).await;
             }
         }
 

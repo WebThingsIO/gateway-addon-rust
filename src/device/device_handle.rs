@@ -8,7 +8,7 @@ use crate::{
     action::ActionBase,
     client::Client,
     error::WebthingsError,
-    event::{EventBase, EventHandleBase},
+    event::{EventBase, EventBuilderBase},
     property::{PropertyBase, PropertyBuilderBase},
     ActionHandle, Adapter, Device, DeviceDescription,
 };
@@ -36,7 +36,7 @@ pub struct DeviceHandle {
     pub connected: bool,
     properties: HashMap<String, Arc<Mutex<Box<dyn PropertyBase>>>>,
     actions: HashMap<String, Arc<Mutex<Box<dyn ActionBase>>>>,
-    events: HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>>,
+    events: HashMap<String, Arc<Mutex<Box<dyn EventBase>>>>,
 }
 
 impl DeviceHandle {
@@ -168,33 +168,29 @@ impl DeviceHandle {
         action.cancel(action_id).await
     }
 
-    pub(crate) fn add_event(&mut self, event: Box<dyn EventBase>) {
-        let name = event.name();
+    pub(crate) async fn add_event(&mut self, event_builder: Box<dyn EventBuilderBase>) {
+        let name = event_builder.name();
 
-        let event_handle = event.build_event_handle(
+        let event = Arc::new(Mutex::new(event_builder.build(
             self.client.clone(),
             self.weak.clone(),
             self.plugin_id.clone(),
             self.adapter_id.clone(),
             self.device_id.clone(),
-            name.clone(),
-        );
+        )));
 
-        let event = Arc::new(Mutex::new(event_handle));
+        self.events.insert(name, event.clone());
 
-        self.events.insert(name, event);
+        event.lock().await.post_init();
     }
 
     /// Get a reference to all the [events][crate::event::Event] which this device owns.
-    pub fn events(&self) -> &HashMap<String, Arc<Mutex<Box<dyn EventHandleBase>>>> {
+    pub fn events(&self) -> &HashMap<String, Arc<Mutex<Box<dyn EventBase>>>> {
         &self.events
     }
 
     /// Get an [event][crate::Event] which this device owns by ID.
-    pub fn get_event(
-        &self,
-        name: impl Into<String>,
-    ) -> Option<Arc<Mutex<Box<dyn EventHandleBase>>>> {
+    pub fn get_event(&self, name: impl Into<String>) -> Option<Arc<Mutex<Box<dyn EventBase>>>> {
         self.events.get(&name.into()).cloned()
     }
 
@@ -209,7 +205,7 @@ impl DeviceHandle {
         let name = name.into();
         if let Some(event) = self.events.get(&name.clone()) {
             let event = event.lock().await;
-            event.raise(data).await?;
+            event.event_handle().raise(data).await?;
             Ok(())
         } else {
             Err(WebthingsError::UnknownEvent(name))
@@ -291,8 +287,11 @@ pub(crate) mod tests {
     }
 
     #[rstest]
-    fn test_get_event(mut device: DeviceHandle) {
-        device.add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())));
+    #[tokio::test]
+    async fn test_get_event(mut device: DeviceHandle) {
+        device
+            .add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())))
+            .await;
         assert!(device.get_event(EVENT_NAME).is_some())
     }
 
@@ -312,6 +311,7 @@ pub(crate) mod tests {
             .lock()
             .await
             .expect_send_message()
+            .times(1)
             .returning(|_| Ok(()));
 
         assert!(device
@@ -333,13 +333,16 @@ pub(crate) mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_raise_event(mut device: DeviceHandle) {
-        device.add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())));
+        device
+            .add_event(Box::new(MockEvent::<NoData>::new(EVENT_NAME.to_owned())))
+            .await;
 
         device
             .client
             .lock()
             .await
             .expect_send_message()
+            .times(1)
             .returning(|_| Ok(()));
 
         assert!(device.raise_event(EVENT_NAME, None).await.is_ok());
@@ -375,5 +378,14 @@ pub(crate) mod tests {
 
         assert!(device.set_connected(connected).await.is_ok());
         assert_eq!(device.connected, connected);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_event_post_init(mut device: DeviceHandle) {
+        let mut mock_event = MockEvent::<NoData>::new(EVENT_NAME.to_owned());
+        mock_event.expect_post_init = true;
+        mock_event.expect_post_init().times(1).returning(|| ());
+        device.add_event(Box::new(mock_event)).await;
     }
 }

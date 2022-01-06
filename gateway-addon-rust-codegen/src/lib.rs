@@ -20,6 +20,11 @@ pub fn property(_args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn event(_args: TokenStream, input: TokenStream) -> TokenStream {
+    apply_macro(input, "event", "Event", Some("Data"))
+}
+
+#[proc_macro_attribute]
 pub fn api_handler(_args: TokenStream, input: TokenStream) -> TokenStream {
     apply_macro(input, "api_handler", "ApiHandler", None)
 }
