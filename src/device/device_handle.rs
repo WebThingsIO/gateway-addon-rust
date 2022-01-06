@@ -63,7 +63,7 @@ impl DeviceHandle {
         }
     }
 
-    pub(crate) fn add_property(&mut self, property_builder: Box<dyn PropertyBuilderBase>) {
+    pub(crate) async fn add_property(&mut self, property_builder: Box<dyn PropertyBuilderBase>) {
         let name = property_builder.name();
 
         let property = Arc::new(Mutex::new(property_builder.build(
@@ -74,7 +74,8 @@ impl DeviceHandle {
             self.device_id.clone(),
         )));
 
-        self.properties.insert(name, property);
+        self.properties.insert(name, property.clone());
+        property.lock().await.post_init();
     }
 
     /// Get a reference to all the [properties][crate::Property] which this device owns.
@@ -108,12 +109,13 @@ impl DeviceHandle {
         }
     }
 
-    pub(crate) fn add_action(&mut self, action: Box<dyn ActionBase>) {
+    pub(crate) async fn add_action(&mut self, action: Box<dyn ActionBase>) {
         let name = action.name();
 
         let action = Arc::new(Mutex::new(action));
 
-        self.actions.insert(name, action);
+        self.actions.insert(name, action.clone());
+        action.lock().await.post_init();
     }
 
     /// Get a reference to all the [actions][crate::action::Action] which this device owns.
@@ -265,8 +267,11 @@ pub(crate) mod tests {
     }
 
     #[rstest]
-    fn test_get_property(mut device: DeviceHandle) {
-        device.add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())));
+    #[tokio::test]
+    async fn test_get_property(mut device: DeviceHandle) {
+        device
+            .add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())))
+            .await;
         assert!(device.get_property(PROPERTY_NAME).is_some())
     }
 
@@ -276,8 +281,11 @@ pub(crate) mod tests {
     }
 
     #[rstest]
-    fn test_get_action(mut device: DeviceHandle) {
-        device.add_action(Box::new(MockAction::<NoInput>::new(ACTION_NAME.to_owned())));
+    #[tokio::test]
+    async fn test_get_action(mut device: DeviceHandle) {
+        device
+            .add_action(Box::new(MockAction::<NoInput>::new(ACTION_NAME.to_owned())))
+            .await;
         assert!(device.get_action(ACTION_NAME).is_some())
     }
 
@@ -304,7 +312,9 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_set_property_value(mut device: DeviceHandle) {
         let value = 42;
-        device.add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())));
+        device
+            .add_property(Box::new(MockProperty::<i32>::new(PROPERTY_NAME.to_owned())))
+            .await;
 
         device
             .client
@@ -387,5 +397,23 @@ pub(crate) mod tests {
         mock_event.expect_post_init = true;
         mock_event.expect_post_init().times(1).returning(|| ());
         device.add_event(Box::new(mock_event)).await;
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_action_post_init(mut device: DeviceHandle) {
+        let mut mock_action = MockAction::<NoInput>::new(ACTION_NAME.to_owned());
+        mock_action.expect_post_init = true;
+        mock_action.expect_post_init().times(1).returning(|| ());
+        device.add_action(Box::new(mock_action)).await;
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_property_post_init(mut device: DeviceHandle) {
+        let mut mock_property = MockProperty::<i32>::new(PROPERTY_NAME.to_owned());
+        mock_property.expect_post_init = true;
+        mock_property.expect_post_init().times(1).returning(|| ());
+        device.add_property(Box::new(mock_property)).await;
     }
 }

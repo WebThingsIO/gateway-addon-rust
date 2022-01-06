@@ -81,11 +81,11 @@ impl AdapterHandle {
             device_handle.weak = device_weak;
 
             for property_builder in properties {
-                device_handle.add_property(property_builder);
+                device_handle.add_property(property_builder).await;
             }
 
             for action in actions {
-                device_handle.add_action(action);
+                device_handle.add_action(action).await;
             }
 
             for event_builder in events {

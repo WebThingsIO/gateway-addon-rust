@@ -68,6 +68,9 @@ pub trait Action: Send + Sync + 'static {
         Err("Action does not implement canceling".to_owned())
     }
 
+    /// Called once after initialization.
+    fn post_init(&mut self) {}
+
     #[doc(hidden)]
     fn full_description(&self) -> FullActionDescription {
         self.description().into_full_description()
@@ -134,6 +137,9 @@ pub trait ActionBase: Send + Sync + AsAny + 'static {
 
     #[doc(hidden)]
     async fn cancel(&mut self, action_id: String) -> Result<(), String>;
+
+    #[doc(hidden)]
+    fn post_init(&mut self) {}
 }
 
 impl Downcast for dyn ActionBase {}
@@ -158,10 +164,16 @@ impl<T: Action> ActionBase for T {
     async fn cancel(&mut self, action_id: String) -> Result<(), String> {
         <T as Action>::cancel(self, action_id).await
     }
+
+    fn post_init(&mut self) {
+        <T as Action>::post_init(self)
+    }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::ops::{Deref, DerefMut};
+
     use crate::{action::Input, Action, ActionDescription, ActionHandle};
     use async_trait::async_trait;
     use mockall::mock;
@@ -170,20 +182,37 @@ pub(crate) mod tests {
         pub ActionHelper<T: Input> {
             pub fn perform(&mut self, action_handle: ActionHandle<T>) -> Result<(), String>;
             pub fn cancel(&mut self, action_id: String) -> Result<(), String>;
+            pub fn post_init(&mut self);
         }
     }
 
     pub struct MockAction<T: Input> {
         action_name: String,
         pub action_helper: MockActionHelper<T>,
+        pub expect_post_init: bool,
     }
 
     impl<T: Input> MockAction<T> {
         pub fn new(action_name: String) -> Self {
             Self {
                 action_name,
+                expect_post_init: false,
                 action_helper: MockActionHelper::new(),
             }
+        }
+    }
+
+    impl<T: Input> Deref for MockAction<T> {
+        type Target = MockActionHelper<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.action_helper
+        }
+    }
+
+    impl<T: Input> DerefMut for MockAction<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.action_helper
         }
     }
 
@@ -209,6 +238,12 @@ pub(crate) mod tests {
 
         async fn cancel(&mut self, action_id: String) -> Result<(), String> {
             self.action_helper.cancel(action_id)
+        }
+
+        fn post_init(&mut self) {
+            if self.expect_post_init {
+                self.action_helper.post_init();
+            }
         }
     }
 }

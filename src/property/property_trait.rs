@@ -56,6 +56,9 @@ pub trait Property: BuiltProperty + Send + Sync + 'static {
     async fn on_update(&mut self, _value: <Self as BuiltProperty>::Value) -> Result<(), String> {
         Ok(())
     }
+
+    /// Called once after initialization.
+    fn post_init(&mut self) {}
 }
 
 /// An object safe variant of [Property] + [BuiltProperty].
@@ -75,6 +78,9 @@ pub trait PropertyBase: Send + Sync + AsAny + 'static {
 
     #[doc(hidden)]
     async fn on_update(&mut self, value: serde_json::Value) -> Result<(), String>;
+
+    #[doc(hidden)]
+    fn post_init(&mut self) {}
 }
 
 impl Downcast for dyn PropertyBase {}
@@ -93,6 +99,10 @@ impl<T: Property> PropertyBase for T {
         let value = <T as BuiltProperty>::Value::deserialize(Some(value))
             .map_err(|err| format!("Could not deserialize value: {:?}", err))?;
         <T as Property>::on_update(self, value).await
+    }
+
+    fn post_init(&mut self) {
+        <T as Property>::post_init(self)
     }
 }
 
@@ -180,6 +190,12 @@ pub(crate) mod tests {
     impl<T: property::Value> Property for BuiltMockProperty<T> {
         async fn on_update(&mut self, value: Self::Value) -> Result<(), String> {
             self.property_helper.on_update(value)
+        }
+
+        fn post_init(&mut self) {
+            if self.expect_post_init {
+                self.property_helper.post_init();
+            }
         }
     }
 }

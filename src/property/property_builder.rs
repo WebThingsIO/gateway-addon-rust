@@ -183,11 +183,13 @@ pub(crate) mod tests {
     mock! {
         pub PropertyHelper<T> {
             pub fn on_update(&self, value: T) -> Result<(), String>;
+            pub fn post_init(&mut self);
         }
     }
 
     pub struct MockProperty<T: property::Value> {
         property_name: String,
+        pub expect_post_init: bool,
         pub property_helper: MockPropertyHelper<T>,
     }
 
@@ -195,6 +197,7 @@ pub(crate) mod tests {
         pub fn new(property_name: String) -> Self {
             Self {
                 property_name,
+                expect_post_init: false,
                 property_helper: MockPropertyHelper::new(),
             }
         }
