@@ -6,9 +6,13 @@
 
 //! A module for everything related to WebthingsIO API Handlers.
 
+mod api_handler_handle;
+mod api_handler_macro;
 pub(crate) mod api_handler_message_handler;
 mod api_handler_trait;
 
+pub use api_handler_handle::*;
+pub use api_handler_macro::*;
 pub use api_handler_trait::*;
 
 /// An [ApiHandler](crate::api_handler::ApiHandler) request.

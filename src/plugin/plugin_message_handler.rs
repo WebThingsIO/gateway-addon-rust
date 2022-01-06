@@ -72,9 +72,7 @@ impl MessageHandler for Plugin {
                     .await
             }
             IPCMessage::ApiHandlerUnloadRequest(_) | IPCMessage::ApiHandlerApiRequest(_) => {
-                (self.api_handler.clone(), self.client.clone())
-                    .handle_message(message)
-                    .await
+                self.api_handler.lock().await.handle_message(message).await
             }
             msg => Err(format!("Unexpected msg: {:?}", msg)),
         }

@@ -6,47 +6,32 @@
 
 use crate::{
     api_handler::{ApiHandler, ApiResponse},
-    client::Client,
     message_handler::{MessageHandler, MessageResult},
 };
 use async_trait::async_trait;
 use serde_json::json;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::{
-    ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, ApiHandlerUnloadRequest,
-    ApiHandlerUnloadResponseMessageData, Message as IPCMessage,
+    ApiHandlerApiRequest, ApiHandlerApiResponseMessageData, Message as IPCMessage,
 };
 
 #[async_trait]
-impl MessageHandler for (Arc<Mutex<dyn ApiHandler>>, Arc<Mutex<Client>>) {
+impl MessageHandler for dyn ApiHandler {
     async fn handle_message(&mut self, message: IPCMessage) -> Result<MessageResult, String> {
-        let (api_handler, client) = self;
-        let mut api_handler = api_handler.lock().await;
-        let mut client = client.lock().await;
-
         match message {
-            IPCMessage::ApiHandlerUnloadRequest(ApiHandlerUnloadRequest { data, .. }) => {
+            IPCMessage::ApiHandlerUnloadRequest(_) => {
                 log::info!("Received request to unload api handler");
 
-                api_handler
-                    .on_unload()
+                self.on_unload()
                     .await
                     .map_err(|err| format!("Could not unload api handler: {}", err))?;
 
-                let message = ApiHandlerUnloadResponseMessageData {
-                    plugin_id: data.plugin_id.clone(),
-                    package_name: data.plugin_id.clone(),
-                }
-                .into();
-
-                client
-                    .send_message(&message)
+                self.api_handler_handle()
+                    .unload()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
             }
             IPCMessage::ApiHandlerApiRequest(ApiHandlerApiRequest { data, .. }) => {
-                let result = api_handler.handle_request(data.request).await;
+                let result = self.handle_request(data.request).await;
 
                 let response = result.clone().unwrap_or_else(|err| ApiResponse {
                     content: serde_json::Value::String(err),
@@ -61,7 +46,10 @@ impl MessageHandler for (Arc<Mutex<dyn ApiHandler>>, Arc<Mutex<Client>>) {
                 }
                 .into();
 
-                client
+                self.api_handler_handle()
+                    .client
+                    .lock()
+                    .await
                     .send_message(&message)
                     .await
                     .map_err(|err| format!("{:?}", err))?;
@@ -78,7 +66,7 @@ impl MessageHandler for (Arc<Mutex<dyn ApiHandler>>, Arc<Mutex<Client>>) {
 #[cfg(test)]
 mod tests {
     use crate::{
-        api_handler::{tests::MockApiHandler, ApiRequest, ApiResponse},
+        api_handler::{api_handler_trait::tests::BuiltMockApiHandler, ApiRequest, ApiResponse},
         message_handler::MessageHandler,
         plugin::tests::{plugin, set_mock_api_handler},
         Plugin,
@@ -108,13 +96,11 @@ mod tests {
             .api_handler
             .lock()
             .await
-            .downcast_mut::<MockApiHandler>()
+            .downcast_mut::<BuiltMockApiHandler>()
             .unwrap()
-            .api_handler_helper
             .expect_on_unload()
             .times(1)
             .returning(|| Ok(()));
-
         plugin
             .client
             .lock()
@@ -126,7 +112,6 @@ mod tests {
             })
             .times(1)
             .returning(|_| Ok(()));
-
         plugin.handle_message(message).await.unwrap();
     }
 
@@ -161,9 +146,8 @@ mod tests {
             .api_handler
             .lock()
             .await
-            .downcast_mut::<MockApiHandler>()
+            .downcast_mut::<BuiltMockApiHandler>()
             .unwrap()
-            .api_handler_helper
             .expect_handle_request()
             .withf(move |req| req.method == request.method && req.path == request.path)
             .times(1)

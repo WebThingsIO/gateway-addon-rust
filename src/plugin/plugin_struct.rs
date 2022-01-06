@@ -6,7 +6,7 @@
 
 use crate::{
     adapter::AdapterBuilder,
-    api_handler::ApiHandler,
+    api_handler::{ApiHandler, ApiHandlerBuilder, ApiHandlerHandle},
     client::Client,
     database::Database,
     error::WebthingsError,
@@ -129,11 +129,14 @@ impl Plugin {
     }
 
     /// Set a new active [ApiHandler](crate::api_handler::ApiHandler).
-    pub async fn set_api_handler<T: ApiHandler>(
+    pub async fn set_api_handler<T: ApiHandlerBuilder>(
         &mut self,
         api_handler: T,
     ) -> Result<(), WebthingsError> {
-        self.api_handler = Arc::new(Mutex::new(api_handler));
+        self.api_handler = Arc::new(Mutex::new(T::build(
+            api_handler,
+            ApiHandlerHandle::new(self.client.clone(), self.plugin_id.clone()),
+        )));
         let message: Message = ApiHandlerAddedNotificationMessageData {
             plugin_id: self.plugin_id.clone(),
             package_name: self.plugin_id.clone(),

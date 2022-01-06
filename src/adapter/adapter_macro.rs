@@ -11,10 +11,7 @@
 ///
 /// #[async_trait]
 /// impl Adapter for BuiltExampleAdapter {
-///     async fn on_unload(&mut self) -> Result<(), String> {
-///         println!("Foo: {}", self.foo);
-///         Ok(())
-///     }
+///     // ...
 /// }
 /// ```
 /// will expand to
