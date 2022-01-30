@@ -9,12 +9,14 @@
 mod property_builder;
 mod property_description;
 mod property_handle;
+mod property_macro;
 mod property_trait;
 mod property_value;
 
 pub use property_builder::*;
 pub use property_description::*;
 pub use property_handle::*;
+pub use property_macro::*;
 pub use property_trait::*;
 pub use property_value::*;
 
@@ -25,8 +27,8 @@ pub type Properties = Vec<Box<dyn PropertyBuilderBase>>;
 ///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, example::ExamplePropertyBuilder};
-/// properties![ExamplePropertyBuilder::new()]
+/// # use gateway_addon_rust::{prelude::*, example::ExampleProperty};
+/// properties![ExampleProperty::new()]
 /// # ;
 /// ```
 #[macro_export]

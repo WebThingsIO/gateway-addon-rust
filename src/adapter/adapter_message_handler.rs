@@ -28,7 +28,7 @@ impl MessageHandler for dyn Adapter {
                     .await
                     .map_err(|err| format!("Could not unload adapter: {}", err))?;
 
-                self.adapter_handle_mut()
+                self.adapter_handle()
                     .unload()
                     .await
                     .map_err(|err| format!("Could not send unload response: {}", err))?;
@@ -72,7 +72,7 @@ impl MessageHandler for dyn Adapter {
                 data: DeviceRemoveActionRequestMessageData { device_id, .. },
                 ..
             }) => {
-                self.adapter_handle_mut()
+                self.adapter_handle()
                     .get_device(device_id)
                     .ok_or_else(|| format!("Unknown device: {}", device_id))?
                     .lock()
@@ -90,7 +90,7 @@ impl MessageHandler for dyn Adapter {
 #[cfg(test)]
 mod tests {
     use crate::{
-        adapter::tests::{add_mock_device, MockAdapter},
+        adapter::tests::{add_mock_device, BuiltMockAdapter},
         message_handler::MessageHandler,
         plugin::tests::{add_mock_adapter, plugin},
         Plugin,
@@ -138,9 +138,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_remove_device()
                 .withf(move |device_id| device_id == DEVICE_ID)
                 .times(1)
@@ -152,7 +151,7 @@ mod tests {
         assert!(adapter
             .lock()
             .await
-            .adapter_handle_mut()
+            .adapter_handle()
             .get_device(DEVICE_ID)
             .is_none())
     }
@@ -172,9 +171,8 @@ mod tests {
         adapter
             .lock()
             .await
-            .downcast_mut::<MockAdapter>()
+            .downcast_mut::<BuiltMockAdapter>()
             .unwrap()
-            .adapter_helper
             .expect_on_unload()
             .times(1)
             .returning(|| Ok(()));
@@ -211,9 +209,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_start_pairing()
                 .withf(move |t| t.as_secs() == timeout as u64)
                 .times(1)
@@ -236,9 +233,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_cancel_pairing()
                 .times(1)
                 .returning(|| Ok(()));
@@ -275,9 +271,8 @@ mod tests {
 
         {
             let mut adapter = adapter.lock().await;
-            let adapter = adapter.downcast_mut::<MockAdapter>().unwrap();
+            let adapter = adapter.downcast_mut::<BuiltMockAdapter>().unwrap();
             adapter
-                .adapter_helper
                 .expect_on_device_saved()
                 .withf(move |id, description| id == DEVICE_ID && description == &device_description)
                 .times(1)

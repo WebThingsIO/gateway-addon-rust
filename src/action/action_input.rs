@@ -131,11 +131,11 @@ impl Input for NoInput {
     }
 
     fn deserialize(value: serde_json::Value) -> Result<Self, WebthingsError> {
-        if value == serde_json::Value::Null {
+        if value == json!(null) || value == json!({}) {
             Ok(NoInput)
         } else {
             Err(WebthingsError::Serialization(serde_json::Error::custom(
-                "Expected no input",
+                format!("Expected no input, got {:?}", value),
             )))
         }
     }

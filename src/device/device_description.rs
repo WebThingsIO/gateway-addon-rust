@@ -12,7 +12,7 @@ use webthings_gateway_ipc_types::{
 
 /// A struct which represents a WoT [device description][webthings_gateway_ipc_types::Device].
 ///
-/// This is used by [DeviceBuilder][crate::DeviceBuilder].
+/// This is used by [DeviceStructure][crate::DeviceStructure].
 ///
 /// Use the provided builder methods instead of directly writing to the struct fields.
 ///
@@ -89,12 +89,14 @@ impl DeviceDescription {
     }
 
     /// Set `@context`.
+    #[must_use]
     pub fn at_context(mut self, at_context: impl Into<String>) -> Self {
         self.at_context = Some(at_context.into());
         self
     }
 
     /// Set `@type`.
+    #[must_use]
     pub fn at_types(mut self, at_types: Vec<AtType>) -> Self {
         self.at_type = Some(at_types);
         self
@@ -111,6 +113,7 @@ impl DeviceDescription {
     ///     .at_type(AtType::OnOffSwitch)
     /// # ;
     /// ```
+    #[must_use]
     pub fn at_type(mut self, at_type: AtType) -> Self {
         match self.at_type {
             None => self.at_type = Some(vec![at_type]),
@@ -120,24 +123,28 @@ impl DeviceDescription {
     }
 
     /// Set `baseHref`.
+    #[must_use]
     pub fn base_href(mut self, base_href: impl Into<String>) -> Self {
         self.base_href = Some(base_href.into());
         self
     }
 
     /// Set `credentialsRequired`.
+    #[must_use]
     pub fn credentials_required(mut self, credentials_required: bool) -> Self {
         self.credentials_required = Some(credentials_required);
         self
     }
 
     /// Set `description`.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Set `links`.
+    #[must_use]
     pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
@@ -163,6 +170,7 @@ impl DeviceDescription {
     ///     })
     /// # ;
     /// ```
+    #[must_use]
     pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
@@ -172,12 +180,14 @@ impl DeviceDescription {
     }
 
     /// Set `pin`.
+    #[must_use]
     pub fn pin(mut self, pin: DevicePin) -> Self {
         self.pin = Some(pin);
         self
     }
 
     /// Set `title`.
+    #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self

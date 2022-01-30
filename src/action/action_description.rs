@@ -65,12 +65,14 @@ impl<T: Input> ActionDescription<T> {
     }
 
     /// Set `@type`.
+    #[must_use]
     pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type);
         self
     }
 
     /// Set `description`.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
@@ -88,12 +90,14 @@ impl<T: Input> ActionDescription<T> {
     /// }))
     /// # ;
     /// ```
+    #[must_use]
     pub fn input(mut self, input: serde_json::Value) -> Self {
         self.input = Some(input);
         self
     }
 
     /// Set `links`.
+    #[must_use]
     pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
@@ -119,6 +123,7 @@ impl<T: Input> ActionDescription<T> {
     ///     })
     /// # ;
     /// ```
+    #[must_use]
     pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
@@ -128,6 +133,7 @@ impl<T: Input> ActionDescription<T> {
     }
 
     /// Set `title`.
+    #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self

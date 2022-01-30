@@ -76,24 +76,28 @@ impl<T: Data> EventDescription<T> {
     }
 
     /// Set `@type`.
+    #[must_use]
     pub fn at_type(mut self, at_type: AtType) -> Self {
         self.at_type = Some(at_type);
         self
     }
 
     /// Set `description`.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Set `enum`.
+    #[must_use]
     pub fn enum_(mut self, enum_: Vec<T>) -> Self {
         self.enum_ = Some(enum_);
         self
     }
 
     /// Set `links`.
+    #[must_use]
     pub fn links(mut self, links: Vec<Link>) -> Self {
         self.links = Some(links);
         self
@@ -119,6 +123,7 @@ impl<T: Data> EventDescription<T> {
     ///     })
     /// # ;
     /// ```
+    #[must_use]
     pub fn link(mut self, link: Link) -> Self {
         match self.links {
             None => self.links = Some(vec![link]),
@@ -128,24 +133,28 @@ impl<T: Data> EventDescription<T> {
     }
 
     /// Set `maximum`.
+    #[must_use]
     pub fn maximum<F: Into<f64>>(mut self, maximum: F) -> Self {
         self.maximum = Some(maximum.into());
         self
     }
 
     /// Set `minimum`.
+    #[must_use]
     pub fn minimum<F: Into<f64>>(mut self, minimum: F) -> Self {
         self.minimum = Some(minimum.into());
         self
     }
 
     /// Set `multipleOf`.
+    #[must_use]
     pub fn multiple_of<F: Into<f64>>(mut self, multiple_of: F) -> Self {
         self.multiple_of = Some(multiple_of.into());
         self
     }
 
     /// Set `title`.
+    #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
@@ -159,12 +168,14 @@ impl<T: Data> EventDescription<T> {
     /// EventDescription::<serde_json::Value>::default().type_(Type::Number)
     /// # ;
     /// ```
+    #[must_use]
     pub fn type_(mut self, type_: Type) -> Self {
         self.type_ = Some(type_);
         self
     }
 
     /// Set `unit`.
+    #[must_use]
     pub fn unit(mut self, unit: impl Into<String>) -> Self {
         self.unit = Some(unit.into());
         self

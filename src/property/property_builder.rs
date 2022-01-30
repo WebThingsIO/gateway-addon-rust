@@ -8,25 +8,22 @@ use crate::{
     client::Client,
     error::WebthingsError,
     property::{PropertyBase, Value},
-    Device, Property, PropertyHandle,
+    Device, Property, PropertyDescription, PropertyHandle,
 };
-
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use webthings_gateway_ipc_types::Property as FullPropertyDescription;
 
 /// A trait used to specify the structure of a WoT property.
 ///
-/// Builds a [Property] instance.
-///
 /// # Examples
 /// ```
-/// # use gateway_addon_rust::{prelude::*, example::ExampleProperty};
-/// // ...
-/// struct ExamplePropertyBuilder();
+/// # use gateway_addon_rust::prelude::*;
+/// pub struct ExampleProperty {
+///     foo: i32,
+/// }
 ///
-/// impl PropertyBuilder for ExamplePropertyBuilder {
-///     type Property = ExampleProperty;
+/// impl PropertyStructure for ExampleProperty {
 ///     type Value = i32;
 ///
 ///     fn name(&self) -> String {
@@ -36,63 +33,94 @@ use webthings_gateway_ipc_types::Property as FullPropertyDescription;
 ///     fn description(&self) -> PropertyDescription<i32> {
 ///         PropertyDescription::default()
 ///     }
-///
-///     fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
-///         ExampleProperty::new(property_handle)
-///     }
 /// }
 /// ```
-pub trait PropertyBuilder: Send + Sync + 'static {
-    /// Type of [property][Property] this builds.
-    type Property: Property<Value = Self::Value>;
-
+pub trait PropertyStructure: Send + Sync + 'static {
     /// Type of [value][Value] which `Self::Property` accepts.
     type Value: Value;
 
     /// Name of the property.
     fn name(&self) -> String;
 
-    /// [WoT description][crate::PropertyDescription] of the property.
-    fn description(&self) -> crate::PropertyDescription<Self::Value>;
-
-    /// Build a new instance of this property using the given [property handle][PropertyHandle].
-    fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property;
+    /// [WoT description][PropertyDescription] of the property.
+    fn description(&self) -> PropertyDescription<Self::Value>;
 
     #[doc(hidden)]
     fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError> {
         self.description().into_full_description(self.name())
     }
-
-    #[doc(hidden)]
-    #[allow(clippy::too_many_arguments)]
-    fn build_(
-        self: Box<Self>,
-        client: Arc<Mutex<Client>>,
-        device: Weak<Mutex<Box<dyn Device>>>,
-        plugin_id: String,
-        adapter_id: String,
-        device_id: String,
-    ) -> Self::Property {
-        let property_handle = PropertyHandle::<Self::Value>::new(
-            client,
-            device,
-            plugin_id,
-            adapter_id,
-            device_id,
-            self.name(),
-            self.description(),
-        );
-        self.build(property_handle)
-    }
 }
 
-/// An object safe variant of [PropertyBuilder].
+/// A trait used to build a [Property] around a data struct and a [property handle][PropertyHandle].
 ///
-/// Auto-implemented for all objects which implement the [PropertyBuilder] trait.  **You never have to implement this trait yourself.**
+/// When you use the [property][macro@crate::property] macro, this will be implemented automatically.
 ///
-/// Forwards all requests to the [PropertyBuilder] implementation.
+/// # Examples
+/// ```
+/// # use gateway_addon_rust::{prelude::*, property::{BuiltProperty, PropertyBuilder}};
+/// # use async_trait::async_trait;
+/// struct ExampleProperty {
+///     foo: i32,
+/// }
 ///
-/// This can (in contrast to the [PropertyBuilder] trait) be used to store objects for dynamic dispatch.
+/// struct BuiltExampleProperty {
+///     data: ExampleProperty,
+///     property_handle: PropertyHandle<i32>,
+/// }
+///
+/// impl BuiltProperty for BuiltExampleProperty {
+///     // ...
+///   # type Value = i32;
+///   # fn property_handle(&self) -> &PropertyHandle<i32> {
+///   #     &self.property_handle
+///   # }
+///   # fn property_handle_mut(&mut self) -> &mut PropertyHandle<i32> {
+///   #     &mut self.property_handle
+///   # }
+/// }
+///
+/// impl PropertyStructure for ExampleProperty {
+///     /// ...
+/// #   type Value = i32;
+/// #   fn name(&self) -> String {
+/// #       "example-property".to_owned()
+/// #   }
+/// #   fn description(&self) -> PropertyDescription<Self::Value> {
+/// #       PropertyDescription::default()
+/// #   }
+/// }
+///
+/// #[async_trait]
+/// impl Property for BuiltExampleProperty {}
+///
+/// impl PropertyBuilder for ExampleProperty {
+///     type BuiltProperty = BuiltExampleProperty;
+///     fn build(data: Self, property_handle: PropertyHandle<i32>) -> Self::BuiltProperty {
+///         BuiltExampleProperty {
+///             data,
+///             property_handle,
+///         }
+///     }
+/// }
+/// ```
+pub trait PropertyBuilder: PropertyStructure {
+    /// Type of [Property] to build.
+    type BuiltProperty: Property;
+
+    /// Build the [property][Property] from a data struct and an [property handle][PropertyHandle].
+    fn build(
+        data: Self,
+        property_handle: PropertyHandle<<Self as PropertyStructure>::Value>,
+    ) -> Self::BuiltProperty;
+}
+
+/// An object safe variant of [PropertyBuilder] + [PropertyStructure].
+///
+/// Auto-implemented for all objects which implement the [PropertyBuilder] trait. **You never have to implement this trait yourself.**
+///
+/// Forwards all requests to the [PropertyBuilder] / [PropertyStructure] implementation.
+///
+/// This can (in contrast to to the [PropertyBuilder] trait) be used to store objects for dynamic dispatch.
 pub trait PropertyBuilderBase: Send + Sync + 'static {
     /// Name of the property.
     fn name(&self) -> String;
@@ -101,6 +129,7 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
     fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError>;
 
     #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
     fn build(
         self: Box<Self>,
         client: Arc<Mutex<Client>>,
@@ -113,14 +142,13 @@ pub trait PropertyBuilderBase: Send + Sync + 'static {
 
 impl<T: PropertyBuilder> PropertyBuilderBase for T {
     fn name(&self) -> String {
-        <T as PropertyBuilder>::name(self)
+        <T as PropertyStructure>::name(self)
     }
 
     fn full_description(&self) -> Result<FullPropertyDescription, WebthingsError> {
-        <T as PropertyBuilder>::full_description(self)
+        <T as PropertyStructure>::full_description(self)
     }
 
-    #[doc(hidden)]
     fn build(
         self: Box<Self>,
         client: Arc<Mutex<Client>>,
@@ -129,37 +157,67 @@ impl<T: PropertyBuilder> PropertyBuilderBase for T {
         adapter_id: String,
         device_id: String,
     ) -> Box<dyn PropertyBase> {
-        Box::new(<T as PropertyBuilder>::build_(
-            self, client, device, plugin_id, adapter_id, device_id,
-        ))
+        let property_handle = PropertyHandle::<<Self as PropertyStructure>::Value>::new(
+            client,
+            device,
+            plugin_id,
+            adapter_id,
+            device_id,
+            self.name(),
+            self.description(),
+        );
+        Box::new(<T as PropertyBuilder>::build(*self, property_handle))
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::ops::{Deref, DerefMut};
+
     use crate::{
-        property::{self, tests::MockProperty},
-        PropertyBuilder, PropertyDescription, PropertyHandle,
+        property::{self, tests::BuiltMockProperty, PropertyBuilder},
+        PropertyDescription, PropertyHandle, PropertyStructure,
     };
+    use mockall::mock;
 
-    use std::marker::PhantomData;
-
-    pub struct MockPropertyBuilder<T: property::Value> {
-        property_name: String,
-        _value: PhantomData<T>,
+    mock! {
+        pub PropertyHelper<T> {
+            pub fn on_update(&self, value: T) -> Result<(), String>;
+            pub fn post_init(&mut self);
+        }
     }
 
-    impl<T: property::Value> MockPropertyBuilder<T> {
+    pub struct MockProperty<T: property::Value> {
+        property_name: String,
+        pub expect_post_init: bool,
+        pub property_helper: MockPropertyHelper<T>,
+    }
+
+    impl<T: property::Value> MockProperty<T> {
         pub fn new(property_name: String) -> Self {
             Self {
                 property_name,
-                _value: PhantomData,
+                expect_post_init: false,
+                property_helper: MockPropertyHelper::new(),
             }
         }
     }
 
-    impl<T: property::Value> PropertyBuilder for MockPropertyBuilder<T> {
-        type Property = MockProperty<T>;
+    impl<T: property::Value> Deref for MockProperty<T> {
+        type Target = MockPropertyHelper<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.property_helper
+        }
+    }
+
+    impl<T: property::Value> DerefMut for MockProperty<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.property_helper
+        }
+    }
+
+    impl<T: property::Value> PropertyStructure for MockProperty<T> {
         type Value = T;
 
         fn name(&self) -> String {
@@ -169,9 +227,12 @@ pub(crate) mod tests {
         fn description(&self) -> PropertyDescription<Self::Value> {
             PropertyDescription::default()
         }
+    }
 
-        fn build(self: Box<Self>, property_handle: PropertyHandle<Self::Value>) -> Self::Property {
-            MockProperty::new(property_handle)
+    impl<T: property::Value> PropertyBuilder for MockProperty<T> {
+        type BuiltProperty = BuiltMockProperty<T>;
+        fn build(data: Self, property_handle: PropertyHandle<T>) -> Self::BuiltProperty {
+            BuiltMockProperty::new(data, property_handle)
         }
     }
 }

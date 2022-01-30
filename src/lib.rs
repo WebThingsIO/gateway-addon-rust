@@ -18,6 +18,7 @@ pub mod device;
 pub mod error;
 pub mod event;
 #[cfg(not(test))]
+#[cfg(debug_assertions)]
 #[doc(hidden)]
 pub mod example;
 pub(crate) mod message_handler;
@@ -36,14 +37,17 @@ pub mod prelude {
     pub use crate::{
         action::{self, Action, ActionDescription, ActionHandle, Actions},
         actions,
-        adapter::{Adapter, AdapterHandle},
-        device::{Device, DeviceBuilder, DeviceDescription, DeviceHandle},
-        event::{self, Event, EventDescription, EventHandle, Events},
+        adapter::{adapter, Adapter, AdapterHandle, AdapterStructure, BuiltAdapter},
+        device::{device, BuiltDevice, Device, DeviceDescription, DeviceHandle, DeviceStructure},
+        event::{
+            self, event, BuiltEvent, Event, EventDescription, EventHandle, EventStructure, Events,
+        },
         events,
         plugin::Plugin,
         properties,
         property::{
-            self, Properties, Property, PropertyBuilder, PropertyDescription, PropertyHandle,
+            self, property, BuiltProperty, Properties, Property, PropertyDescription,
+            PropertyHandle, PropertyStructure,
         },
     };
 }

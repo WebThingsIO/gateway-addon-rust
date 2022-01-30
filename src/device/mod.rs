@@ -9,12 +9,14 @@
 mod device_builder;
 mod device_description;
 mod device_handle;
+mod device_macro;
 pub(crate) mod device_message_handler;
 mod device_trait;
 
 pub use device_builder::*;
 pub use device_description::*;
 pub use device_handle::*;
+pub use device_macro::*;
 pub use device_trait::*;
 
 #[cfg(test)]
