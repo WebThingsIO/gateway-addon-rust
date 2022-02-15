@@ -16,6 +16,8 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
+          override: true
+          components: rustfmt
       - name: Calculate doc coverage
         id: coverage
         uses: bewee/rustdoc-coverage-action@v1
