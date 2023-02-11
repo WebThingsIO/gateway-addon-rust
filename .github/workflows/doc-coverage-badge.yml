@@ -1,0 +1,34 @@
+name: Doc Coverage Badge
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  badge:
+    name: Doc Coverage Badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt
+      - name: Calculate doc coverage
+        id: coverage
+        uses: bewee/rustdoc-coverage-action@v1
+        with:
+          percentage-format: 0%
+      - name: Create Awesome Badge
+        uses: schneegans/dynamic-badges-action@v1.1.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: dd88b34c67cb5761c8a1d7c6d2335cf7
+          filename: gateway-addon-rust-doc-coverage.json
+          label: doc cov
+          message: ${{ steps.coverage.outputs.documented }}
+          color: orange
